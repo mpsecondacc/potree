@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Simple Test</title>
+    <style>
+        body { margin: 0; padding: 0; background: #111; color: white; font-family: Arial; }
+        .test-container { padding: 20px; }
+        .viewport { 
+            position: absolute; 
+            border: 2px solid #00ff00; 
+            background: #222;
+            padding: 10px;
+        }
+        .viewport-1 { left: 0; top: 0; width: 66%; height: 100vh; }
+        .viewport-2 { left: 66%; top: 0; width: 34%; height: 50vh; }
+        .viewport-3 { left: 66%; top: 50vh; width: 34%; height: 50vh; }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>Simple Multi-Viewport Layout Test</h1>
+        <p>This tests the basic layout without any complex imports</p>
+    </div>
+
+    <!-- Simple viewport layout -->
+    <div class="viewport viewport-1">
+        <h2>Main Viewport (66% width)</h2>
+        <p>This would be the main orthographic top view</p>
+    </div>
+
+    <div class="viewport viewport-2">
+        <h2>Profile Viewport</h2>
+        <p>Top right (50% height)</p>
+    </div>
+
+    <div class="viewport viewport-3">
+        <h2>Auxiliary Viewport</h2>
+        <p>Bottom right (50% height)</p>
+    </div>
+
+    <script>
+        console.log('Simple layout loaded successfully');
+        
+        // Test if we can see all three viewports
+        const viewports = document.querySelectorAll('.viewport');
+        console.log('Found viewports:', viewports.length);
+        
+        viewports.forEach((vp, index) => {
+            vp.addEventListener('click', () => {
+                console.log(`Clicked viewport ${index + 1}`);
+                vp.style.backgroundColor = '#333';
+                setTimeout(() => {
+                    vp.style.backgroundColor = '#222';
+                }, 200);
+            });
+        });
+    </script>
+</body>
+</html>

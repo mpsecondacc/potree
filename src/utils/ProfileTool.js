@@ -3,6 +3,7 @@ import * as THREE from "../../libs/three.js/build/three.module.js";
 import {Profile} from "./Profile.js";
 import {Utils} from "../utils.js";
 import { EventDispatcher } from "../EventDispatcher.js";
+import {CameraMode} from "../defines.js";
 
 
 export class ProfileTool extends EventDispatcher {
@@ -62,10 +63,13 @@ export class ProfileTool extends EventDispatcher {
 	}
 
 	startInsertion (args = {}) {
-		
+		// Check if we're in the required camera mode and view
+		if (!this.isValidViewForProfileCreation()) {
+			this.showRequirementWarning();
+			return null;
+		}
 		
 		if (this.isCreatingProfile) {
-			
 			this.cancelInsertion();
 		}
 
@@ -74,7 +78,6 @@ export class ProfileTool extends EventDispatcher {
 		this.currentProfile = new Profile();
 		this.currentProfile.name = args.name || 'Profile';
 
-		
 		this.dispatchEvent({
 			type: 'start_inserting_profile',
 			profile: this.currentProfile
@@ -84,7 +87,6 @@ export class ProfileTool extends EventDispatcher {
 		this.scene.add(this.currentProfile);
 		this.viewer.scene.addProfile(this.currentProfile);
 
-		
 		// Create preview geometry
 		this.createPreviewGeometry();
 
@@ -94,8 +96,30 @@ export class ProfileTool extends EventDispatcher {
 		// Show user instructions
 		this.showInstructions('Click on the point cloud to set the START point of your profile');
 
-		
 		return this.currentProfile;
+	}
+
+	isValidViewForProfileCreation() {
+		// Check if camera is in orthographic mode
+		const isOrthographic = this.viewer.scene.cameraMode === CameraMode.ORTHOGRAPHIC;
+		
+		// Check if we're in top view (pitch = -π/2, yaw = 0)
+		const view = this.viewer.scene.view;
+		const isTopView = Math.abs(view.pitch + Math.PI / 2) < 0.1 && Math.abs(view.yaw) < 0.1;
+		
+		return isOrthographic && isTopView;
+	}
+
+	showRequirementWarning() {
+		this.showInstructions(`
+			⚠️ Profile Tool Requirements:
+			<br><br>
+			• Camera must be in <strong>Orthographic</strong> mode
+			<br>
+			• View must be set to <strong>Top View</strong>
+			<br><br>
+			Please switch to orthographic camera and top view (press 'U' key) before using the profile tool.
+		`, 5000);
 	}
 
 	cancelInsertion() {

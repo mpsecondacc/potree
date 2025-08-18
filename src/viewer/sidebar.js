@@ -248,10 +248,13 @@ export class Sidebar{
 				$('#menu_measurements').next().slideDown(); ;
 				let profile = this.profileTool.startInsertion();
 
-				let measurementsRoot = $("#jstree_scene").jstree().get_json("measurements");
-				let jsonNode = measurementsRoot.children.find(child => child.data.uuid === profile.uuid);
-				$.jstree.reference(jsonNode.id).deselect_all();
-				$.jstree.reference(jsonNode.id).select_node(jsonNode.id);
+				// Only proceed if profile was successfully created (not blocked by requirements)
+				if (profile) {
+					let measurementsRoot = $("#jstree_scene").jstree().get_json("measurements");
+					let jsonNode = measurementsRoot.children.find(child => child.data.uuid === profile.uuid);
+					$.jstree.reference(jsonNode.id).deselect_all();
+					$.jstree.reference(jsonNode.id).select_node(jsonNode.id);
+				}
 			}
 		));
 

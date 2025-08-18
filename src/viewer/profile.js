@@ -251,31 +251,31 @@ export class ProfileWindow extends EventDispatcher {
 		this.autoFitEnabled = true; // completely disable/enable
 		this.autoFit = false; // internal
 
-		let cwIcon = `${exports.resourcePath}/icons/arrow_cw.svg`;
+		let cwIcon = `${(window.Potree && window.Potree.resourcePath) || '../build/potree/resources'}/icons/arrow_cw.svg`;
 		$('#potree_profile_rotate_cw').attr('src', cwIcon);
 
-		let ccwIcon = `${exports.resourcePath}/icons/arrow_ccw.svg`;
+		let ccwIcon = `${(window.Potree && window.Potree.resourcePath) || '../build/potree/resources'}/icons/arrow_ccw.svg`;
 		$('#potree_profile_rotate_ccw').attr('src', ccwIcon);
 		
-		let forwardIcon = `${exports.resourcePath}/icons/arrow_up.svg`;
+		let forwardIcon = `${(window.Potree && window.Potree.resourcePath) || '../build/potree/resources'}/icons/arrow_up.svg`;
 		$('#potree_profile_move_forward').attr('src', forwardIcon);
 
-		let backwardIcon = `${exports.resourcePath}/icons/arrow_down.svg`;
+		let backwardIcon = `${(window.Potree && window.Potree.resourcePath) || '../build/potree/resources'}/icons/arrow_down.svg`;
 		$('#potree_profile_move_backward').attr('src', backwardIcon);
 
-		let dxf2DIcon = `${exports.resourcePath}/icons/file_dxf_2d.svg`;
+		let dxf2DIcon = `${(window.Potree && window.Potree.resourcePath) || '../build/potree/resources'}/icons/file_dxf_2d.svg`;
 		$('#potree_download_dxf2D_icon').attr('src', dxf2DIcon);
 
-		let dxf3DIcon = `${exports.resourcePath}/icons/file_dxf_3d.svg`;
+		let dxf3DIcon = `${(window.Potree && window.Potree.resourcePath) || '../build/potree/resources'}/icons/file_dxf_3d.svg`;
 		$('#potree_download_dxf3D_icon').attr('src', dxf3DIcon);
 
-		let csvIcon = `${exports.resourcePath}/icons/file_csv_2d.svg`;
+		let csvIcon = `${(window.Potree && window.Potree.resourcePath) || '../build/potree/resources'}/icons/file_csv_2d.svg`;
 		$('#potree_download_csv_icon').attr('src', csvIcon);
 
-		let lasIcon = `${exports.resourcePath}/icons/file_las_3d.svg`;
+		let lasIcon = `${(window.Potree && window.Potree.resourcePath) || '../build/potree/resources'}/icons/file_las_3d.svg`;
 		$('#potree_download_las_icon').attr('src', lasIcon);
 
-		let closeIcon = `${exports.resourcePath}/icons/close.svg`;
+		let closeIcon = `${(window.Potree && window.Potree.resourcePath) || '../build/potree/resources'}/icons/close.svg`;
 		$('#closeProfileContainer').attr("src", closeIcon);
 
 		this.initTHREE();

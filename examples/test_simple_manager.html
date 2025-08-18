@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Simple MultiViewportManager Test</title>
+    <style>
+        body { margin: 0; padding: 20px; background: #111; color: white; font-family: Arial; }
+        .test-container { width: 800px; height: 600px; border: 2px solid #00ff00; background: #222; margin: 20px 0; }
+        .results { margin: 20px 0; padding: 10px; background: #333; }
+    </style>
+</head>
+<body>
+    <h1>Simple MultiViewportManager Test</h1>
+    <div id="results" class="results">Loading...</div>
+    <div id="test_container" class="test-container"></div>
+
+    <!-- Only essential dependencies -->
+    <script src="../libs/jquery/jquery-3.1.1.min.js"></script>
+    <script src="../libs/proj4/proj4.js"></script>
+    <script src="../build/potree/potree.js"></script>
+
+    <script type="module">
+        import * as THREE from "../libs/three.js/build/three.module.js";
+        
+        // Set resource path
+        window.Potree = window.Potree || {};
+        window.Potree.resourcePath = '../build/potree/resources';
+        
+        const results = document.getElementById('results');
+        
+        try {
+            results.innerHTML = 'Step 1: Importing MultiViewportManager...';
+            
+            const { MultiViewportManager } = await import("../src/components/MultiViewportManager.js");
+            
+            results.innerHTML = 'Step 2: Creating MultiViewportManager instance...';
+            
+            const container = document.getElementById('test_container');
+            const manager = new MultiViewportManager(container);
+            
+            results.innerHTML = '<strong>SUCCESS!</strong> MultiViewportManager created without errors.<br>' +
+                               'Check console for detailed logs.<br>' +
+                               'You should see 3 viewport areas with headers and controls.';
+            
+            console.log('SUCCESS: MultiViewportManager works!', manager);
+            
+        } catch (error) {
+            results.innerHTML = `<strong>FAILED:</strong> ${error.message}`;
+            results.style.backgroundColor = '#440000';
+            console.error('Test failed:', error);
+        }
+    </script>
+</body>
+</html>

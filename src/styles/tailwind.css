@@ -1,0 +1,89 @@
+/* Tailwind CSS v3.x CDN approach for now - in production, you'd use the full build process */
+@import url('https://cdn.jsdelivr.net/npm/tailwindcss@3.3.0/base.min.css');
+@import url('https://cdn.jsdelivr.net/npm/tailwindcss@3.3.0/components.min.css');
+@import url('https://cdn.jsdelivr.net/npm/tailwindcss@3.3.0/utilities.min.css');
+
+/* Custom viewport styles */
+.viewport-container {
+  transition: all 0.2s ease-in-out;
+}
+
+.viewport-header {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.resize-handle {
+  transition: background-color 0.15s ease-in-out;
+}
+
+.resize-handle:hover {
+  background-color: #3b82f6;
+}
+
+.resize-handle:active {
+  background-color: #1d4ed8;
+}
+
+/* Headless UI compatibility */
+.headless-transition-enter {
+  opacity: 0;
+  transform: scale(0.95);
+}
+
+.headless-transition-enter-active {
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 150ms ease-out, transform 150ms ease-out;
+}
+
+.headless-transition-exit {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.headless-transition-exit-active {
+  opacity: 0;
+  transform: scale(0.95);
+  transition: opacity 75ms ease-in, transform 75ms ease-in;
+}
+
+/* Dark theme enhancements */
+.dark .viewport-container {
+  border-color: #374151;
+}
+
+.dark .viewport-header {
+  background-color: rgba(31, 41, 55, 0.8);
+  border-color: #374151;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .viewport-container {
+    min-height: 200px;
+  }
+  
+  .resize-handle {
+    width: 4px;
+    height: 4px;
+  }
+}
+
+/* Custom scrollbars for viewport content */
+.viewport-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.viewport-content::-webkit-scrollbar-track {
+  background: #1f2937;
+}
+
+.viewport-content::-webkit-scrollbar-thumb {
+  background: #4b5563;
+  border-radius: 3px;
+}
+
+.viewport-content::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}

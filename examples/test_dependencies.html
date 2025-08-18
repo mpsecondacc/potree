@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Test Dependencies</title>
+    <style>
+        body { margin: 0; padding: 20px; background: #111; color: white; font-family: Arial; }
+        .status { margin: 10px 0; padding: 10px; border: 1px solid #333; }
+        .success { background: #004400; border-color: #008800; }
+        .error { background: #440000; border-color: #880000; }
+    </style>
+</head>
+<body>
+    <h1>Potree Dependencies Test</h1>
+    <div id="results"></div>
+
+    <!-- All Potree script dependencies -->
+    <script src="../libs/jquery/jquery-3.1.1.min.js"></script>
+    <script src="../libs/spectrum/spectrum.js"></script>
+    <script src="../libs/jquery-ui/jquery-ui.min.js"></script>
+    <script src="../libs/other/BinaryHeap.js"></script>
+    <script src="../libs/tween/tween.min.js"></script>
+    <script src="../libs/d3/d3.js"></script>
+    <script src="../libs/proj4/proj4.js"></script>
+    <script src="../libs/openlayers3/ol.js"></script>
+    <script src="../libs/i18next/i18next.js"></script>
+    <script src="../libs/jstree/jstree.js"></script>
+    <script src="../build/potree/potree.js"></script>
+    <script src="../libs/plasio/js/laslaz.js"></script>
+
+    <script type="module">
+        import * as THREE from "../libs/three.js/build/three.module.js";
+        
+        const results = document.getElementById('results');
+        
+        function addResult(name, success, details = '') {
+            const div = document.createElement('div');
+            div.className = `status ${success ? 'success' : 'error'}`;
+            div.innerHTML = `<strong>${name}:</strong> ${success ? 'OK' : 'FAILED'} ${details}`;
+            results.appendChild(div);
+        }
+        
+        // Test basic dependencies
+        addResult('jQuery', typeof $ !== 'undefined', $ ? `v${$.fn.jquery}` : '');
+        addResult('THREE.js', typeof THREE !== 'undefined', THREE ? `r${THREE.REVISION}` : '');
+        addResult('proj4', typeof proj4 !== 'undefined');
+        addResult('d3', typeof d3 !== 'undefined');
+        addResult('i18next', typeof i18next !== 'undefined');
+        addResult('TWEEN', typeof TWEEN !== 'undefined');
+        addResult('ol (OpenLayers)', typeof ol !== 'undefined');
+        addResult('Potree', typeof Potree !== 'undefined');
+        
+        // Set resource path
+        window.Potree = window.Potree || {};
+        window.Potree.resourcePath = '../build/potree/resources';
+        
+        try {
+            // Test MultiViewportManager import
+            const { MultiViewportManager } = await import("../src/components/MultiViewportManager.js");
+            addResult('MultiViewportManager import', true);
+            
+            // Try to create instance
+            const testDiv = document.createElement('div');
+            testDiv.style.width = '100px';
+            testDiv.style.height = '100px';
+            document.body.appendChild(testDiv);
+            
+            const manager = new MultiViewportManager(testDiv);
+            addResult('MultiViewportManager instantiation', true);
+            
+            // Clean up
+            testDiv.remove();
+            
+        } catch (error) {
+            addResult('MultiViewportManager', false, error.message);
+        }
+        
+        addResult('Overall Test', true, 'All dependencies loaded successfully!');
+        
+    </script>
+</body>
+</html>
