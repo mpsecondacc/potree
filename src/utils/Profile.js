@@ -10,6 +10,7 @@ export class Profile extends THREE.Object3D{
 		this.constructor.counter = (this.constructor.counter === undefined) ? 0 : this.constructor.counter + 1;
 
 		this.name = 'Profile_' + this.constructor.counter;
+		this.uuid = THREE.Math.generateUUID();
 		this.points = [];
 		this.spheres = [];
 		this.edges = [];
