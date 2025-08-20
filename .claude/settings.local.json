@@ -2,9 +2,22 @@
   "permissions": {
     "allow": [
       "Bash(mkdir:*)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(node:*)",
+      "Bash(npm start)",
+      "Bash(taskkill:*)",
+      "Bash(powershell:*)",
+      "Bash(curl:*)",
+      "Bash(start http://localhost:1234/test-multi-viewer-NEW.html)",
+      "Bash(npm run build:*)",
+      "Bash(grep:*)",
+      "Bash(python:*)",
+      "Bash(npx gulp:*)"
     ],
     "deny": [],
-    "ask": []
+    "ask": [],
+    "additionalDirectories": [
+      "C:\\c\\Users\\Meerko\\Documents\\GitHub"
+    ]
   }
 }

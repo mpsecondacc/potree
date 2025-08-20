@@ -46,6 +46,16 @@ export class Viewer extends EventDispatcher{
 		this.guiLoadTasks = [];
 
 		this.onVrListeners = [];
+		
+		// CUSTOM MULTI-VIEWER SUPPORT - Added for multi-viewer functionality
+		this.isMultiViewer = args.isMultiViewer || false;
+		this.multiViewerConfig = args.isMultiViewer ? {
+			id: args.viewerId || 'viewer',
+			managerId: args.managerId || null,
+			sharedResources: args.sharedResources || null,
+			isActive: false,
+			syncEnabled: true
+		} : null;
 
 		this.messages = [];
 		this.elMessages = $(`

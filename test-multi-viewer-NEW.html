@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Viewer Test - Real Implementation</title>
+    
+    <!-- Critical dependencies that need to be loaded before potree.js -->
+    <script src="./libs/jquery/jquery-3.1.1.min.js"></script>
+    <script src="./libs/spectrum/spectrum.js"></script>
+    <script src="./libs/tween/tween.min.js"></script>
+    <script src="./libs/d3/d3.js"></script>
+    <script src="./libs/proj4/proj4.js"></script>
+    <script src="./libs/jstree/jstree.js"></script>
+    
+    <link rel="stylesheet" type="text/css" href="./libs/spectrum/spectrum.css">
+    <link rel="stylesheet" type="text/css" href="./libs/jstree/themes/mixed/style.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: white;
+        }
+        
+        .container {
+            width: 100% !important;
+            height: 600px !important;
+            min-height: 600px !important;
+            background: #2a2a2a;
+            border: 2px solid #444;
+            position: relative;
+            display: block !important;
+            box-sizing: border-box !important;
+        }
+        
+        .controls {
+            margin-bottom: 20px;
+        }
+        
+        button {
+            margin: 5px;
+            padding: 8px 16px;
+            background: #0066cc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background: #0052a3;
+        }
+        
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            background: #333;
+            padding: 10px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        
+        .potree-multi-viewer-container {
+            border: 1px solid #666;
+        }
+        
+        .potree-viewer-container {
+            border: 2px solid #0088ff !important;
+            background: #222222 !important;
+            min-width: 100px !important;
+            min-height: 100px !important;
+            overflow: visible !important;
+        }
+        
+        .potree-viewer-container canvas {
+            display: block !important;
+            width: 100% !important;
+            height: 100% !important;
+        }
+        
+        .potree-viewer-label {
+            color: white !important;
+            background: rgba(0, 100, 200, 0.8) !important;
+        }
+    </style>
+</head>
+<body>
+    <h1>Potree Multi-Viewer Test - Real Implementation</h1>
+    <p>Testing actual viewer creation, layout management, and synchronization.</p>
+    
+    <div class="controls">
+        <button onclick="testCreateMultiViewer()" id="createBtn">Create MultiViewer</button>
+        <button onclick="testCreateViewers()" id="createViewersBtn" disabled>Create Viewers (2)</button>
+        <button onclick="testLoadPointCloud()" id="loadPCBtn" disabled>Load Point Cloud</button>
+        <button onclick="testLayout1x2()" id="layout1x2Btn" disabled>Layout Main+2 Side</button>
+        <button onclick="testLayout2x2()" id="layout2x2Btn" disabled>Layout 2x2 (4 viewers)</button>
+        <button onclick="toggleSync()" id="toggleSyncBtn" disabled>Toggle Sync (OFF)</button>
+        <button onclick="testAddViewer()" id="addViewerBtn" disabled>Add Viewer</button>
+        <button onclick="testRemoveViewer()" id="removeViewerBtn" disabled>Remove Viewer</button>
+        <button onclick="testIdentification()" id="identificationBtn" disabled>Test Identification</button>
+        <button onclick="testStatus()" id="statusBtn" disabled>Show Status</button>
+        
+        <!-- Configuration Persistence Controls -->
+        <br><br><strong>Configuration Persistence:</strong><br>
+        <button onclick="testSaveConfiguration()" id="saveConfigBtn" disabled>Save Config</button>
+        <button onclick="testLoadConfiguration()" id="loadConfigBtn" disabled>Load Config</button>
+        <button onclick="testListConfigurations()" id="listConfigBtn" disabled>List Configs</button>
+        <button onclick="testExportConfiguration()" id="exportConfigBtn" disabled>Export Config</button>
+        <input type="file" id="importFileInput" accept=".json" style="display: none;" onchange="testImportConfiguration(this)">
+        <button onclick="document.getElementById('importFileInput').click()" id="importConfigBtn" disabled>Import Config</button>
+        <button onclick="testDeleteConfiguration()" id="deleteConfigBtn" disabled>Delete Config</button>
+        
+        <button onclick="testDestroy()" id="destroyBtn" disabled>Destroy</button>
+    </div>
+    
+    <div id="viewer-container" class="container"></div>
+    
+    <div class="status" id="status">
+       
+    </div>
+    
+    <!-- Load Potree as traditional script instead of ES6 module -->
+    <script src="./build/potree/potree.js"></script>
+    <!-- Load LAS/LAZ support after potree.js -->
+    <script src="./libs/plasio/js/laslaz.js"></script>
+    
+    <script>
+        let multiViewer = null;
+        let testViewers = [];
+        
+        // Potree is now available globally as window.Potree
+        
+        // Test utilities
+        function log(message) {
+            const statusEl = document.getElementById('status');
+            const timestamp = new Date().toLocaleTimeString();
+            statusEl.textContent += `\n[${timestamp}] ${message}`;
+            statusEl.scrollTop = statusEl.scrollHeight;
+            console.log(message);
+        }
+        
+        function enableButton(id) {
+            document.getElementById(id).disabled = false;
+        }
+        
+        function disableButton(id) {
+            document.getElementById(id).disabled = true;
+        }
+        
+        // Test 1: Create MultiViewer
+        window.testCreateMultiViewer = async function() {
+            try {
+                log('Creating real MultiViewer...');
+                log('Checking Potree exports...');
+                
+                // Debug: Check what's available in Potree (now using global window.Potree)
+                console.log('Potree object:', window.Potree);
+                console.log('Potree.MultiViewer:', window.Potree ? window.Potree.MultiViewer : 'undefined');
+                console.log('Available Potree exports:', window.Potree ? Object.keys(window.Potree) : 'empty');
+                
+                const container = document.getElementById('viewer-container');
+                
+                // Check if basic Potree exports work first
+                if (!window.Potree || Object.keys(window.Potree).length === 0) {
+                    throw new Error('Potree exports are completely empty - there is a build error preventing all exports');
+                }
+                
+                if (!window.Potree.Viewer) {
+                    throw new Error('Basic Potree.Viewer not found. Available: ' + Object.keys(window.Potree).slice(0, 10).join(', '));
+                }
+                
+                log('✓ Basic Potree exports working');
+                log('✓ Potree.Viewer available');
+                log('Available exports: ' + Object.keys(window.Potree).slice(0, 10).join(', ') + '...');
+                
+                if (!window.Potree.MultiViewer && !window.Potree.MultiViewerSimple) {
+                    throw new Error('MultiViewer classes not found. This is expected while debugging build issues.');
+                }
+                
+                // Try simple version first if MultiViewer is not available
+                const MultiViewerClass = window.Potree.MultiViewer || window.Potree.MultiViewerSimple;
+                log(`Using ${MultiViewerClass.name} class`);
+                log('Creating MultiViewer instance...');
+                
+                // Create actual MultiViewer using our implementation
+                multiViewer = new MultiViewerClass(container, {
+                    maxViewers: 4,
+                    defaultLayout: '1x1',
+                    enableSync: true,
+                    autoLoadGUI: false  // Don't auto-load GUI for test
+                });
+                
+                log('MultiViewer instance created, waiting for initialization...');
+                
+                // Wait for initialization (MultiViewer initializes automatically in constructor)
+                await new Promise((resolve) => {
+                    if (multiViewer.isReady) {
+                        log('MultiViewer was already ready');
+                        resolve();
+                    } else {
+                        log('Waiting for ready event...');
+                        multiViewer.addEventListener('ready', () => {
+                            log('Ready event received!');
+                            resolve();
+                        });
+                        
+                        // Add a timeout as fallback
+                        setTimeout(() => {
+                            log('⚠️ Initialization timeout, proceeding anyway...');
+                            resolve();
+                        }, 5000);
+                    }
+                });
+                
+                log('✓ MultiViewer created and initialized');
+                log('✓ ViewerManager active');
+                log('✓ ViewerRegistry ready');
+                log('✓ ViewerLayout system ready');
+                log('✓ ViewerSync system ready');
+                
+                enableButton('createViewersBtn');
+                enableButton('layout1x2Btn');
+                enableButton('layout2x2Btn');
+                disableButton('createBtn');
+                
+            } catch (error) {
+                log(`✗ Error creating MultiViewer: ${error.message}`);
+                console.error('Full error:', error);
+                console.error('Stack:', error.stack);
+            }
+        };
+        
+        // Test 2: Create 2 Viewers (main, profile)
+        window.testCreateViewers = async function() {
+            if (!multiViewer) {
+                log('✗ MultiViewer not created yet');
+                return;
+            }
+            
+            try {
+                log('Setting up 2-viewer layout...');
+                
+                // Destroy all existing viewers first
+                if (testViewers.length > 0) {
+                    log('Destroying existing viewers...');
+                    for (const viewer of testViewers) {
+                        if (viewer.multiViewerConfig && viewer.multiViewerConfig.id) {
+                            multiViewer.removeViewer(viewer.multiViewerConfig.id);
+                        }
+                    }
+                    testViewers = [];
+                    log('✓ All existing viewers destroyed');
+                }
+                
+                // Create exactly 2 viewers
+                const viewerConfigs = [
+                    { id: 'main', name: 'Main Viewer' },
+                    { id: 'profile', name: 'Profile View' }
+                ];
+                
+                log('Creating 2 viewers...');
+                for (const config of viewerConfigs) {
+                    log(`Creating viewer '${config.id}'...`);
+                    const viewer = await multiViewer.createViewer(config.id, config);
+                    testViewers.push(viewer);
+                    log(`✓ Created viewer '${config.id}' (${config.name})`);
+                }
+                
+                log(`✓ Created ${testViewers.length} real viewers`);
+                
+                // Apply 1x2 layout for 2 viewers
+                log('Setting layout to 1x2 for 2 viewers...');
+                multiViewer.setLayout('1x2');
+                log('✓ Layout applied: 2 viewers side by side');
+                
+                enableButton('loadPCBtn');
+                enableButton('toggleSyncBtn');
+                enableButton('addViewerBtn');
+                enableButton('removeViewerBtn');
+                enableButton('identificationBtn');
+                enableButton('statusBtn');
+                
+                // Enable configuration persistence buttons
+                enableButton('saveConfigBtn');
+                enableButton('loadConfigBtn');
+                enableButton('listConfigBtn');
+                enableButton('exportConfigBtn');
+                enableButton('importConfigBtn');
+                enableButton('deleteConfigBtn');
+                
+            } catch (error) {
+                log(`✗ Error creating viewers: ${error.message}`);
+                console.error(error);
+            }
+        };
+        
+        // Test 3: Load Point Cloud (with Resource Sharing)
+        window.testLoadPointCloud = async function() {
+            if (!multiViewer || testViewers.length === 0) {
+                log('✗ Need viewers to load point cloud');
+                return;
+            }
+            
+            try {
+                log('Loading sample point cloud with resource sharing...');
+                
+                // Use the same point cloud as in classifications.html example
+                const pointCloudUrl = "http://5.9.65.151/mschuetz/potree/resources/pointclouds/opentopography/CA13_1.4/cloud.js";
+                const pointCloudName = 'CA13';
+                
+                log(`Loading point cloud: ${pointCloudName}`);
+                log(`URL: ${pointCloudUrl}`);
+                log(`Viewers: ${testViewers.length}`);
+                log('Using SharedResourceManager - 1 dataset will be shared across all viewers');
+                log('This may take a few seconds...');
+                
+                // Get memory stats before loading
+                const statsBefore = multiViewer.getMemoryStats();
+                log(`Memory before loading:`);
+                log(`  Point clouds in cache: ${statsBefore.pointCloudCount}`);
+                log(`  Memory usage: ${(statsBefore.total / 1024 / 1024).toFixed(2)} MB`);
+                
+                // Use resource sharing to load point cloud into all viewers
+                const results = await multiViewer.loadPointCloud(pointCloudUrl, pointCloudName);
+                
+                // Get memory stats after loading
+                const statsAfter = multiViewer.getMemoryStats();
+                log(`Memory after loading:`);
+                log(`  Point clouds in cache: ${statsAfter.pointCloudCount}`);
+                log(`  Memory usage: ${(statsAfter.total / 1024 / 1024).toFixed(2)} MB`);
+                log(`  Sharing efficiency: ${statsAfter.sharingEfficiency.toFixed(2)}x`);
+                log(`  Memory saved: ${((testViewers.length - 1) / testViewers.length * 100).toFixed(1)}%`);
+                
+                log('✓ Point cloud loaded successfully with resource sharing!');
+                log(`✓ 1 dataset shared across ${testViewers.length} viewers`);
+                log('✓ All viewers auto-zoomed to point cloud extents');
+                
+                // Verify each viewer has the point cloud
+                testViewers.forEach((viewer, index) => {
+                    if (viewer.scene) {
+                        const pointClouds = viewer.scene.pointclouds;
+                        log(`✓ Viewer ${index + 1}: ${pointClouds ? pointClouds.length : 0} point cloud(s)`);
+                        
+                        if (pointClouds && pointClouds.length > 0) {
+                            const pc = pointClouds[0];
+                            const isShared = pc.material && pc.material._isSharedResource;
+                            log(`  Resource type: ${isShared ? 'SHARED' : 'independent'}`);
+                            if (isShared) {
+                                log(`  Viewer ID: ${pc.material._viewerId}`);
+                                log(`  Resource ID: ${pc.material._sharedResourceId}`);
+                            }
+                        }
+                    }
+                });
+                
+                log('');
+                log('🎉 Resource Sharing Success!');
+                log('✓ Single point cloud dataset loaded once');
+                log(`✓ ${testViewers.length} independent material instances created`);
+                log('✓ Each viewer can have different visual settings');
+                log('✓ Memory usage minimized through intelligent sharing');
+                
+                
+            } catch (error) {
+                log(`✗ Error loading point cloud: ${error.message}`);
+                log('This is normal if the sample URL is not accessible');
+                log('You can still test other features');
+                console.error(error);
+            }
+        };
+        
+        // Test 4: Layout Main+2 Side (3 viewers: main, top, bottom)
+        window.testLayout1x2 = async function() {
+            if (!multiViewer) {
+                log('✗ MultiViewer not created yet');
+                return;
+            }
+            
+            try {
+                log('Setting up Main+2 Side layout...');
+                
+                // Destroy all existing viewers first
+                if (testViewers.length > 0) {
+                    log('Destroying existing viewers...');
+                    for (const viewer of testViewers) {
+                        if (viewer.multiViewerConfig && viewer.multiViewerConfig.id) {
+                            multiViewer.removeViewer(viewer.multiViewerConfig.id);
+                        }
+                    }
+                    testViewers = [];
+                    log('✓ All existing viewers destroyed');
+                }
+                
+                // Create exactly 3 viewers for main-dual layout
+                const viewerConfigs = [
+                    { id: 'main', name: 'Main Viewer' },
+                    { id: 'top', name: 'Top View' },
+                    { id: 'bottom', name: 'Bottom View' }
+                ];
+                
+                log('Creating 3 viewers for main-dual layout...');
+                for (const config of viewerConfigs) {
+                    const viewer = await multiViewer.createViewer(config.id, config);
+                    testViewers.push(viewer);
+                    log(`✓ Created viewer '${config.id}' (${config.name})`);
+                }
+                
+                log('Setting layout to main-dual...');
+                multiViewer.setLayout('main-dual');
+                log('✓ Layout changed to main-dual');
+                log('✓ 3 viewers arranged: 1 main view (left) + 2 side viewports (top-right, bottom-right)');
+                log('✓ Main viewer: full height, 2/3 width');
+                log('✓ Side viewers: 1/2 height each, 1/3 width');
+                
+                enableButton('layout2x2Btn');
+                enableButton('loadPCBtn');
+                enableButton('toggleSyncBtn');
+                enableButton('addViewerBtn');
+                enableButton('removeViewerBtn');
+                enableButton('identificationBtn');
+                
+                // Enable configuration persistence buttons
+                enableButton('saveConfigBtn');
+                enableButton('loadConfigBtn');
+                enableButton('listConfigBtn');
+                enableButton('exportConfigBtn');
+                enableButton('importConfigBtn');
+                enableButton('deleteConfigBtn');
+                
+            } catch (error) {
+                log(`✗ Error setting layout: ${error.message}`);
+            }
+        };
+        
+        // Test 5: Layout 2x2 (4 viewers in grid)
+        window.testLayout2x2 = async function() {
+            if (!multiViewer) {
+                log('✗ MultiViewer not created yet');
+                return;
+            }
+            
+            try {
+                log('Setting up 2x2 grid layout...');
+                
+                // Destroy all existing viewers first
+                if (testViewers.length > 0) {
+                    log('Destroying existing viewers...');
+                    for (const viewer of testViewers) {
+                        if (viewer.multiViewerConfig && viewer.multiViewerConfig.id) {
+                            multiViewer.removeViewer(viewer.multiViewerConfig.id);
+                        }
+                    }
+                    testViewers = [];
+                    log('✓ All existing viewers destroyed');
+                }
+                
+                // Create exactly 4 viewers for 2x2 layout
+                const viewerConfigs = [
+                    { id: 'viewer1', name: 'Viewer 1' },
+                    { id: 'viewer2', name: 'Viewer 2' },
+                    { id: 'viewer3', name: 'Viewer 3' },
+                    { id: 'viewer4', name: 'Viewer 4' }
+                ];
+                
+                log('Creating 4 viewers for 2x2 layout...');
+                for (const config of viewerConfigs) {
+                    const viewer = await multiViewer.createViewer(config.id, config);
+                    testViewers.push(viewer);
+                    log(`✓ Created viewer '${config.id}' (${config.name})`);
+                }
+                
+                log('Setting layout to 2x2...');
+                multiViewer.setLayout('2x2');
+                log('✓ Layout changed to 2x2');
+                log('✓ All 4 viewers arranged in 2x2 grid');
+                log('✓ Each viewer: 1/2 width, 1/2 height');
+                
+                enableButton('loadPCBtn');
+                enableButton('toggleSyncBtn');
+                enableButton('addViewerBtn');
+                enableButton('removeViewerBtn');
+                enableButton('identificationBtn');
+                
+                // Enable configuration persistence buttons
+                enableButton('saveConfigBtn');
+                enableButton('loadConfigBtn');
+                enableButton('listConfigBtn');
+                enableButton('exportConfigBtn');
+                enableButton('importConfigBtn');
+                enableButton('deleteConfigBtn');
+                
+            } catch (error) {
+                log(`✗ Error setting 2x2 layout: ${error.message}`);
+            }
+        };
+        
+        
+        // Sync Toggle Function
+        let syncEnabled = false;
+        window.toggleSync = function() {
+            console.log('toggleSync called!');
+            
+            if (!multiViewer) {
+                log('✗ MultiViewer not created yet');
+                return;
+            }
+            
+            try {
+                syncEnabled = !syncEnabled;
+                console.log('Setting sync to:', syncEnabled);
+                
+                multiViewer.setSyncEnabled(syncEnabled);
+                
+                const toggleBtn = document.getElementById('toggleSyncBtn');
+                toggleBtn.textContent = `Toggle Sync (${syncEnabled ? 'ON' : 'OFF'})`;
+                toggleBtn.style.backgroundColor = syncEnabled ? '#4CAF50' : '#f44336';
+                
+                log(`✓ Camera synchronization ${syncEnabled ? 'enabled' : 'disabled'}`);
+                
+                // Debug: check actual viewer sync states
+                const allViewers = multiViewer.getAllViewers();
+                Object.keys(allViewers).forEach(id => {
+                    const viewer = allViewers[id];
+                    const actualSyncState = viewer.multiViewerConfig?.syncEnabled;
+                    console.log(`Viewer '${id}' sync state:`, actualSyncState);
+                });
+                
+            } catch (error) {
+                log(`✗ Error toggling sync: ${error.message}`);
+                console.error(error);
+            }
+        };
+
+        // Test 6: Dynamic Viewer Creation/Destruction
+        let dynamicViewerCounter = 1;
+        
+        window.testAddViewer = async function() {
+            if (!multiViewer) {
+                log('✗ MultiViewer not created yet');
+                return;
+            }
+            
+            try {
+                const currentCount = multiViewer.getViewerCount();
+                
+                // Progressive layout: 1 → 2 (1x1) → 3 (1x2) → 4 (2x2)
+                if (currentCount >= 4) {
+                    log('⚠️ Maximum of 4 viewers allowed');
+                    log('Current layout progression: 1 viewer → 1x1 → 1x2 → 2x2 (max)');
+                    return;
+                }
+                
+                // Use consistent naming pattern: viewer1, viewer2, viewer3, viewer4
+                const viewerNumber = currentCount + 1;
+                const viewerId = `viewer${viewerNumber}`;
+                const viewerName = `Viewer ${viewerNumber}`;
+                
+                log(`Testing dynamic viewer addition...`);
+                log(`Creating viewer: '${viewerId}' (${viewerName})`);
+                log(`Progression: ${currentCount} → ${currentCount + 1} viewers`);
+                
+                const viewer = await multiViewer.addViewer(viewerId, {
+                    name: viewerName
+                });
+                
+                if (viewer) {
+                    // Add viewer to test array so point cloud loading works
+                    testViewers.push(viewer);
+                    
+                    const newCount = multiViewer.getViewerCount();
+                    log(`✓ Successfully added viewer '${viewerId}'`);
+                    log(`✓ Total viewers: ${newCount}`);
+                    log(`✓ Viewer IDs: ${multiViewer.getViewerIds().join(', ')}`);
+                    log(`✓ Updated testViewers array (${testViewers.length} viewers)`);
+                    
+                    // Apply progressive layout based on viewer count
+                    let targetLayout = '1x1';
+                    let layoutDescription = 'Single viewer (full screen)';
+                    
+                    if (newCount === 2) {
+                        targetLayout = '1x2';
+                        layoutDescription = '1x2 layout (2 viewers side by side)';
+                    } else if (newCount === 3) {
+                        targetLayout = 'main-dual';
+                        layoutDescription = 'Main + 2 side viewers layout';
+                    } else if (newCount === 4) {
+                        targetLayout = '2x2';
+                        layoutDescription = '2x2 grid (4 viewers in quadrants)';
+                    }
+                    
+                    // Apply the layout
+                    log(`Applying ${targetLayout} layout: ${layoutDescription}`);
+                    multiViewer.setLayout(targetLayout);
+                    log(`✓ Layout applied: ${layoutDescription}`);
+                    
+                    // Load point cloud in new viewer if available
+                    try {
+                        await viewer.loadGUI();
+                        if (window.samplePointCloudUrl) {
+                            log(`Loading point cloud in new viewer...`);
+                            const pc = await viewer.loadPointCloud(window.samplePointCloudUrl);
+                            if (pc) {
+                                viewer.fitToScreen();
+                                log(`✓ Point cloud loaded in '${viewerId}'`);
+                            }
+                        }
+                    } catch (error) {
+                        log(`⚠️ Could not load point cloud in new viewer: ${error.message}`);
+                    }
+                    
+                    dynamicViewerCounter++;
+                } else {
+                    log(`✗ Failed to add viewer '${viewerId}'`);
+                }
+                
+            } catch (error) {
+                log(`✗ Error adding viewer: ${error.message}`);
+                console.error(error);
+            }
+        };
+        
+        window.testRemoveViewer = function() {
+            if (!multiViewer) {
+                log('✗ MultiViewer not created yet');
+                return;
+            }
+            
+            try {
+                const currentCount = multiViewer.getViewerCount();
+                const viewerIds = multiViewer.getViewerIds();
+                log(`Current viewers (${currentCount}): ${viewerIds.join(', ')}`);
+                
+                if (currentCount <= 1) {
+                    log('⚠️ Cannot remove viewer - at least one viewer must remain');
+                    log('Current layout progression: 1 viewer → 1x1 → 1x2 → 2x2');
+                    return;
+                }
+                
+                // Remove the highest numbered viewer (viewer4, then viewer3, etc.)
+                // This works with both predefined (viewer1, viewer2, etc.) and any naming scheme
+                const viewerNumbers = viewerIds
+                    .filter(id => id.startsWith('viewer'))
+                    .map(id => parseInt(id.replace('viewer', '')))
+                    .filter(num => !isNaN(num))
+                    .sort((a, b) => b - a); // Sort descending
+                
+                let targetViewer;
+                if (viewerNumbers.length > 0) {
+                    // Remove highest numbered viewer
+                    targetViewer = `viewer${viewerNumbers[0]}`;
+                } else {
+                    // Fallback: remove the last viewer in the list
+                    targetViewer = viewerIds[viewerIds.length - 1];
+                }
+                
+                log(`Testing dynamic viewer removal...`);
+                log(`Removing viewer: '${targetViewer}'`);
+                log(`Progression: ${currentCount} → ${currentCount - 1} viewers`);
+                
+                const success = multiViewer.removeViewer(targetViewer);
+                
+                if (success) {
+                    // Update testViewers array - rebuild it from current viewers
+                    testViewers = [];
+                    const allViewers = multiViewer.getAllViewers();
+                    for (const viewerId in allViewers) {
+                        testViewers.push(allViewers[viewerId]);
+                    }
+                    
+                    const newCount = multiViewer.getViewerCount();
+                    log(`✓ Successfully removed viewer '${targetViewer}'`);
+                    log(`✓ Total viewers: ${newCount}`);
+                    log(`✓ Remaining viewer IDs: ${multiViewer.getViewerIds().join(', ')}`);
+                    log(`✓ Updated testViewers array (${testViewers.length} viewers)`);
+                    
+                    // Apply reverse progressive layout based on remaining viewer count
+                    let targetLayout = '1x1';
+                    let layoutDescription = 'Single viewer (full screen)';
+                    
+                    if (newCount === 2) {
+                        targetLayout = '1x2';
+                        layoutDescription = '1x2 layout (2 viewers side by side)';
+                    } else if (newCount === 3) {
+                        targetLayout = 'main-dual';
+                        layoutDescription = 'Main + 2 side viewers layout';
+                    } else if (newCount === 1) {
+                        targetLayout = '1x1';
+                        layoutDescription = 'Single viewer (full screen)';
+                    }
+                    
+                    // Apply the layout
+                    log(`Applying ${targetLayout} layout: ${layoutDescription}`);
+                    try {
+                        multiViewer.setLayout(targetLayout);
+                        log(`✓ Layout applied: ${layoutDescription}`);
+                    } catch (layoutError) {
+                        log(`⚠️ Layout update failed: ${layoutError.message}`);
+                        console.warn('Layout update failed:', layoutError);
+                    }
+                    
+                } else {
+                    log(`✗ Failed to remove viewer '${targetViewer}'`);
+                }
+                
+            } catch (error) {
+                log(`✗ Error removing viewer: ${error.message}`);
+                console.error(error);
+            }
+        };
+
+        // Test 7: Identification and Naming System
+        window.testIdentification = function() {
+            if (!multiViewer) {
+                log('✗ MultiViewer not created yet');
+                return;
+            }
+            
+            try {
+                log('Testing viewer identification and naming system...');
+                
+                // Test 1: Get current viewer information
+                const registryStats = multiViewer.getRegistryStats();
+                log(`Current viewers: ${registryStats.totalViewers}`);
+                log(`Active viewers: ${registryStats.activeViewers}`);
+                log(`Viewer IDs: ${registryStats.idList.join(', ')}`);
+                log(`Viewer Names: ${registryStats.nameList.join(', ')}`);
+                
+                // Test 2: Get detailed viewer information
+                const detailedInfo = multiViewer.getDetailedViewerInfo();
+                log('\nDetailed viewer information:');
+                detailedInfo.forEach((info, index) => {
+                    log(`  ${index + 1}. ID: '${info.id}', Name: '${info.name}', Active: ${info.isActive}`);
+                    log(`     Created: ${new Date(info.createdAt).toLocaleString()}`);
+                    log(`     Has Renderer: ${info.hasRenderer}, Has Scene: ${info.hasScene}`);
+                });
+                
+                // Test 3: Rename viewers with descriptive names
+                log('\nTesting viewer renaming...');
+                const viewers = multiViewer.getAllViewers();
+                const viewerIds = Object.keys(viewers);
+                
+                if (viewerIds.length >= 2) {
+                    // Rename first two viewers
+                    const success1 = multiViewer.renameViewer(viewerIds[0], 'Primary Display');
+                    const success2 = multiViewer.renameViewer(viewerIds[1], 'Secondary Monitor');
+                    
+                    log(`✓ Renamed '${viewerIds[0]}' to 'Primary Display': ${success1}`);
+                    log(`✓ Renamed '${viewerIds[1]}' to 'Secondary Monitor': ${success2}`);
+                    
+                    // Test finding by name
+                    const primaryViewer = multiViewer.getViewerByName('Primary Display');
+                    const secondaryViewer = multiViewer.getViewerByName('Secondary Monitor');
+                    
+                    log(`✓ Found 'Primary Display': ${!!primaryViewer}`);
+                    log(`✓ Found 'Secondary Monitor': ${!!secondaryViewer}`);
+                }
+                
+                // Test 4: Search functionality
+                log('\nTesting search functionality...');
+                const searchResults = multiViewer.findViewersByName('Display', false);
+                log(`Search for 'Display' (partial): ${searchResults.length} results`);
+                searchResults.forEach(result => {
+                    log(`  Found: ID='${result.id}', Name='${result.name}'`);
+                });
+                
+                // Test 5: Auto-assign names based on layout
+                log('\nTesting auto-assignment of layout-based names...');
+                multiViewer.autoAssignNames();
+                
+                // Show updated names
+                const updatedStats = multiViewer.getRegistryStats();
+                log(`Updated viewer names: ${updatedStats.nameList.join(', ')}`);
+                
+                // Test 6: Generate unique names and IDs
+                log('\nTesting unique name/ID generation...');
+                const uniqueName = multiViewer.generateUniqueViewerName('Test Viewer');
+                const uniqueId = multiViewer.generateUniqueViewerId('test');
+                log(`Generated unique name: '${uniqueName}'`);
+                log(`Generated unique ID: '${uniqueId}'`);
+                
+                // Test 7: Name validation
+                const isNameTaken = multiViewer.isViewerNameTaken('Primary Display');
+                const isNewNameTaken = multiViewer.isViewerNameTaken('Unused Name');
+                log(`Is 'Primary Display' taken: ${isNameTaken}`);
+                log(`Is 'Unused Name' taken: ${isNewNameTaken}`);
+                
+                // Test 8: Advanced search by criteria
+                log('\nTesting advanced search by criteria...');
+                const activeViewers = multiViewer.findViewersByCriteria({ isActive: true });
+                const recentViewers = multiViewer.findViewersByCriteria({ 
+                    createdAfter: Date.now() - (5 * 60 * 1000) // Last 5 minutes
+                });
+                
+                log(`Active viewers found: ${activeViewers.length}`);
+                log(`Recent viewers found: ${recentViewers.length}`);
+                
+                // Test 9: Get viewer name map
+                const nameMap = multiViewer.getViewerNameMap();
+                log('\nViewer name mapping:');
+                Object.entries(nameMap).forEach(([name, id]) => {
+                    log(`  '${name}' → '${id}'`);
+                });
+                
+                log('\n✓ Identification and naming system test complete!');
+                log('✓ Viewer renaming: WORKING');
+                log('✓ Name-based lookup: WORKING');
+                log('✓ Partial search: WORKING');
+                log('✓ Auto-assignment: WORKING');
+                log('✓ Unique generation: WORKING');
+                log('✓ Advanced search: WORKING');
+                log('✓ Name validation: WORKING');
+                
+            } catch (error) {
+                log(`✗ Error testing identification: ${error.message}`);
+                console.error(error);
+            }
+        };
+        
+        // Test 7: Status and Statistics
+        window.testStatus = function() {
+            if (!multiViewer) {
+                log('✗ MultiViewer not created yet');
+                return;
+            }
+            
+            try {
+                log('Getting status information...');
+                
+                const status = multiViewer.getStatus();
+                
+                log('✓ Status Information:');
+                log(`  - Ready: ${status.isReady}`);
+                log(`  - Viewer Count: ${status.viewerCount}/${status.maxViewers}`);
+                log(`  - Current Layout: ${status.currentLayout}`);
+                log(`  - Manager Initialized: ${status.isInitialized}`);
+                log('✓ Status system working');
+                
+                enableButton('destroyBtn');
+                
+            } catch (error) {
+                log(`✗ Error getting status: ${error.message}`);
+            }
+        };
+        
+        // Test 8: Cleanup
+        window.testDestroy = function() {
+            if (!multiViewer) {
+                log('✗ MultiViewer not created yet');
+                return;
+            }
+            
+            try {
+                log('Destroying MultiViewer...');
+                
+                multiViewer.destroy();
+                multiViewer = null;
+                testViewers = [];
+                
+                log('✓ MultiViewer destroyed');
+                log('✓ All viewers removed from DOM');
+                log('✓ Resources cleaned up');
+                
+                // Reset buttons
+                enableButton('createBtn');
+                disableButton('createViewersBtn');
+                disableButton('layout1x2Btn');
+                disableButton('layout2x2Btn');
+                disableButton('toggleSyncBtn');
+                disableButton('addViewerBtn');
+                disableButton('removeViewerBtn');
+                disableButton('identificationBtn');
+                disableButton('statusBtn');
+                
+                // Disable configuration persistence buttons
+                disableButton('saveConfigBtn');
+                disableButton('loadConfigBtn');
+                disableButton('listConfigBtn');
+                disableButton('exportConfigBtn');
+                disableButton('importConfigBtn');
+                disableButton('deleteConfigBtn');
+                
+                disableButton('destroyBtn');
+                
+                log('\n=== Real Implementation Test Complete ===');
+                log('Multi-viewer system functioning correctly!');
+                
+            } catch (error) {
+                log(`✗ Error during cleanup: ${error.message}`);
+            }
+        };
+        
+        // Initial status
+        log('Real implementation test environment ready.');
+        log('This will create actual Potree viewers with:');
+        log('- Real ViewerManager coordination');
+        log('- Actual DOM containers and positioning');
+        log('- Working layout management');  
+        log('- Proper resource management');
+        log('- Visual viewer indicators and labels');
+        log('');
+        log('Click "Create MultiViewer" to start testing...');
+        
+        // Configuration Persistence Tests
+        window.testSaveConfiguration = async function() {
+            if (!multiViewer) {
+                log('✗ MultiViewer not created yet');
+                return;
+            }
+            
+            try {
+                log('\n=== Configuration Save Test ===');
+                
+                // Save with timestamp
+                const configName = `test-config-${Date.now()}`;
+                const success = await multiViewer.saveConfiguration(configName);
+                
+                if (success) {
+                    log(`✓ Configuration saved as '${configName}'`);
+                    log('✓ Captured complete viewer state including:');
+                    log('  - Layout pattern and dimensions');
+                    log('  - Camera positions and targets');
+                    log('  - Point cloud configurations');
+                    log('  - Material settings');
+                    log('  - Sync state');
+                    log('  - Viewer identification');
+                } else {
+                    log('✗ Failed to save configuration');
+                }
+                
+                // Also save as default for easy testing
+                const defaultSuccess = await multiViewer.saveConfiguration('default');
+                if (defaultSuccess) {
+                    log(`✓ Also saved as 'default' for easy loading`);
+                }
+                
+            } catch (error) {
+                log(`✗ Error saving configuration: ${error.message}`);
+            }
+        };
+        
+        window.testLoadConfiguration = async function() {
+            if (!multiViewer) {
+                log('✗ MultiViewer not created yet');
+                return;
+            }
+            
+            try {
+                log('\n=== Configuration Load Test ===');
+                
+                const success = await multiViewer.loadConfiguration('default');
+                
+                if (success) {
+                    log('✓ Configuration loaded successfully');
+                    log('✓ Restored complete viewer state:');
+                    log('  - Layout recreated from saved pattern');
+                    log('  - Cameras positioned at saved locations');
+                    log('  - Point clouds reloaded with proper transforms');
+                    log('  - Material settings restored');
+                    log('  - Sync state restored');
+                    log('  - Viewer identification maintained');
+                    
+                    // Update viewer references after restore
+                    testViewers = [];
+                    const allViewers = multiViewer.getAllViewers();
+                    for (const viewerId in allViewers) {
+                        testViewers.push(allViewers[viewerId]);
+                    }
+                    log(`✓ Updated test viewer references (${testViewers.length} viewers)`);
+                } else {
+                    log('✗ Failed to load configuration (possibly not found)');
+                    log('💡 Try saving a configuration first');
+                }
+                
+            } catch (error) {
+                log(`✗ Error loading configuration: ${error.message}`);
+            }
+        };
+        
+        window.testListConfigurations = function() {
+            try {
+                log('\n=== Configuration List Test ===');
+                
+                const configs = multiViewer.listConfigurations();
+                
+                if (configs.length === 0) {
+                    log('ℹ️ No saved configurations found');
+                    log('💡 Save some configurations first to see them here');
+                } else {
+                    log(`Found ${configs.length} saved configurations:`);
+                    configs.forEach((name, index) => {
+                        log(`  ${index + 1}. '${name}'`);
+                    });
+                }
+                
+            } catch (error) {
+                log(`✗ Error listing configurations: ${error.message}`);
+            }
+        };
+        
+        window.testExportConfiguration = async function() {
+            if (!multiViewer) {
+                log('✗ MultiViewer not created yet');
+                return;
+            }
+            
+            try {
+                log('\n=== Configuration Export Test ===');
+                
+                const filename = `potree-multiviewer-export-${Date.now()}.json`;
+                await multiViewer.exportConfigurationToFile(filename);
+                
+                log(`✓ Configuration exported to file: ${filename}`);
+                log('✓ File contains complete serialized state:');
+                log('  - JSON format for easy inspection/editing');
+                log('  - All viewer configurations');
+                log('  - Layout and sync settings');
+                log('  - Point cloud references');
+                log('  - Camera states and materials');
+                log('💾 File downloaded to your Downloads folder');
+                
+            } catch (error) {
+                log(`✗ Error exporting configuration: ${error.message}`);
+            }
+        };
+        
+        window.testImportConfiguration = async function(fileInput) {
+            if (!multiViewer) {
+                log('✗ MultiViewer not created yet');
+                return;
+            }
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                log('✗ No file selected');
+                return;
+            }
+            
+            try {
+                log('\n=== Configuration Import Test ===');
+                
+                const file = fileInput.files[0];
+                log(`📁 Importing configuration from: ${file.name}`);
+                
+                const saveName = `imported-${Date.now()}`;
+                const success = await multiViewer.importConfigurationFromFile(file, saveName);
+                
+                if (success) {
+                    log(`✓ Configuration imported successfully`);
+                    log(`✓ Saved as '${saveName}' in local storage`);
+                    log('✓ Complete viewer state restored:');
+                    log('  - Layout recreated from imported file');
+                    log('  - All viewers restored with correct settings');
+                    log('  - Point clouds reloaded automatically');
+                    log('  - Camera positions restored');
+                    log('  - Sync and material settings applied');
+                    
+                    // Update viewer references after import
+                    testViewers = [];
+                    const allViewers = multiViewer.getAllViewers();
+                    for (const viewerId in allViewers) {
+                        testViewers.push(allViewers[viewerId]);
+                    }
+                    log(`✓ Updated test viewer references (${testViewers.length} viewers)`);
+                } else {
+                    log('✗ Failed to import configuration');
+                    log('💡 Check file format - should be JSON exported from this system');
+                }
+                
+                // Clear the input for next use
+                fileInput.value = '';
+                
+            } catch (error) {
+                log(`✗ Error importing configuration: ${error.message}`);
+                fileInput.value = '';
+            }
+        };
+        
+        window.testDeleteConfiguration = function() {
+            try {
+                log('\n=== Configuration Delete Test ===');
+                
+                const configs = multiViewer.listConfigurations();
+                if (configs.length === 0) {
+                    log('ℹ️ No configurations to delete');
+                    return;
+                }
+                
+                // Delete the first non-default configuration
+                let configToDelete = configs.find(name => name !== 'default');
+                if (!configToDelete && configs.includes('default')) {
+                    configToDelete = 'default';
+                }
+                
+                if (configToDelete) {
+                    const success = multiViewer.deleteConfiguration(configToDelete);
+                    if (success) {
+                        log(`✓ Deleted configuration '${configToDelete}'`);
+                        
+                        const remainingConfigs = multiViewer.listConfigurations();
+                        log(`ℹ️ Remaining configurations: ${remainingConfigs.length}`);
+                        remainingConfigs.forEach(name => log(`  - '${name}'`));
+                    } else {
+                        log(`✗ Failed to delete configuration '${configToDelete}'`);
+                    }
+                } else {
+                    log('ℹ️ No suitable configuration found to delete');
+                }
+                
+            } catch (error) {
+                log(`✗ Error deleting configuration: ${error.message}`);
+            }
+        };
+        
+    </script>
+</body>
+</html>

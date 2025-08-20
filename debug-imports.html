@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Potree Imports</title>
+</head>
+<body>
+    <div id="output"></div>
+    
+    <script>
+        // Test 1: UMD Global Loading (original way)
+        console.log('=== Testing UMD Global Loading ===');
+        
+        const script = document.createElement('script');
+        script.src = './build/potree/potree.js';
+        script.onload = function() {
+            console.log('UMD loaded successfully');
+            console.log('window.Potree:', typeof window.Potree);
+            console.log('window.Potree keys:', window.Potree ? Object.keys(window.Potree).length : 'undefined');
+            console.log('Has Viewer:', !!window.Potree?.Viewer);
+            console.log('Has MultiViewer:', !!window.Potree?.MultiViewer);
+            
+            document.getElementById('output').innerHTML += `
+                <h3>UMD Loading Results:</h3>
+                <p>Potree object type: ${typeof window.Potree}</p>
+                <p>Export count: ${window.Potree ? Object.keys(window.Potree).length : 0}</p>
+                <p>Has Viewer: ${!!window.Potree?.Viewer}</p>
+                <p>Has MultiViewer: ${!!window.Potree?.MultiViewer}</p>
+                <p>First 10 exports: ${window.Potree ? Object.keys(window.Potree).slice(0, 10).join(', ') : 'none'}</p>
+            `;
+            
+            // Test ES6 import after UMD loads
+            testES6Import();
+        };
+        script.onerror = function() {
+            console.error('Failed to load UMD script');
+            document.getElementById('output').innerHTML += '<p>❌ UMD loading failed</p>';
+        };
+        document.head.appendChild(script);
+        
+        async function testES6Import() {
+            console.log('=== Testing ES6 Module Import ===');
+            try {
+                const module = await import('./build/potree/potree.js');
+                console.log('ES6 import successful');
+                console.log('Module:', module);
+                console.log('Module keys:', Object.keys(module));
+                console.log('Module.Viewer:', !!module.Viewer);
+                console.log('Module.MultiViewer:', !!module.MultiViewer);
+                
+                document.getElementById('output').innerHTML += `
+                    <h3>ES6 Import Results:</h3>
+                    <p>Module type: ${typeof module}</p>
+                    <p>Export count: ${Object.keys(module).length}</p>
+                    <p>Has Viewer: ${!!module.Viewer}</p>
+                    <p>Has MultiViewer: ${!!module.MultiViewer}</p>
+                    <p>First 10 exports: ${Object.keys(module).slice(0, 10).join(', ')}</p>
+                `;
+                
+            } catch (error) {
+                console.error('ES6 import failed:', error);
+                document.getElementById('output').innerHTML += `<p>❌ ES6 import failed: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

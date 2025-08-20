@@ -63,6 +63,18 @@ export * from "./viewer/viewer.js";
 export * from "./viewer/Scene.js";
 export * from "./viewer/HierarchicalSlider.js";
 
+// CUSTOM MULTI-VIEWER IMPLEMENTATION - Enabled for testing
+export * from "./viewer/ViewerManager-NEW.js";
+export * from "./viewer/ViewerRegistry-NEW.js";
+export * from "./viewer/ViewerLayout-NEW.js";
+export * from "./viewer/ViewerSync-NEW.js";
+export * from "./viewer/SharedResourceManager-NEW.js";
+export * from "./viewer/ViewerConfiguration-NEW.js";
+
+// Import and export specific classes to avoid conflicts
+import { MultiViewer } from "./viewer/MultiViewer-NEW.js";
+export { MultiViewer };
+
 export * from "./modules/OrientedImages/OrientedImages.js";
 export * from "./modules/Images360/Images360.js";
 export * from "./modules/CameraAnimation/CameraAnimation.js";
@@ -85,6 +97,9 @@ import {POCLoader} from "./loader/POCLoader.js";
 import {CopcLoader, EptLoader} from "./loader/EptLoader.js";
 import {PointCloudOctree} from "./PointCloudOctree.js";
 import {WorkerPool} from "./WorkerPool.js";
+
+// CUSTOM IMPORT - Import BinaryHeap that is used in Potree_update_visibility.js
+import "./utils/BinaryHeap-NEW.js";
 
 export const workerPool = new WorkerPool();
 
