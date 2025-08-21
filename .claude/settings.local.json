@@ -14,7 +14,8 @@
       "Bash(python:*)",
       "Bash(npx gulp:*)",
       "Bash(rg:*)",
-      "Bash(cp:*)"
+      "Bash(cp:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": [],
