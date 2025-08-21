@@ -21,7 +21,7 @@ import { ViewerSync } from "./ViewerSync-NEW.js";
 import { SharedResourceManager } from "./SharedResourceManager-NEW.js";
 import { RenderOptimizer } from "./RenderOptimizer-NEW.js";
 import { CrossViewerCommunication } from "./CrossViewerCommunication-NEW.js";
-import { ViewerSidebar } from "./ViewerSidebar-NEW.js";
+import { MultiViewerSidebar } from "./MultiViewerSidebar-NEW.js";
 
 export class ViewerManager extends EventDispatcher {
     
@@ -298,8 +298,10 @@ export class ViewerManager extends EventDispatcher {
         // The RenderOptimizer will manage rendering for optimal performance
         this.renderOptimizer.registerViewer(viewerId, viewer);
         
-        // SIDEBAR: Create viewer-specific sidebar
-        this.createViewerSidebar(viewerId, viewer);
+        // SIDEBAR: Create viewer-specific sidebar (async)
+        this.createViewerSidebar(viewerId, viewer).catch(error => {
+            console.error(`Failed to create sidebar for viewer '${viewerId}':`, error);
+        });
         
         // Initialize camera management after viewer is ready
         setTimeout(() => {
@@ -323,31 +325,16 @@ export class ViewerManager extends EventDispatcher {
      * @param {string} viewerId - The viewer ID
      * @param {Viewer} viewer - The viewer instance
      */
-    createViewerSidebar(viewerId, viewer) {
+    async createViewerSidebar(viewerId, viewer) {
         try {
-            const sidebar = new ViewerSidebar(viewer, viewerId, this);
+            const sidebar = new MultiViewerSidebar(viewer, viewerId, this);
+            
+            // Initialize sidebar asynchronously (loads template, sets up DOM)
+            await sidebar.init();
+            
             this.viewerSidebars.set(viewerId, sidebar);
             
-            // Setup sidebar event forwarding
-            sidebar.addEventListener('sidebar_opened', (event) => {
-                this.dispatchEvent({
-                    type: 'viewer_sidebar_opened',
-                    viewerId: viewerId,
-                    sidebar: sidebar,
-                    manager: this
-                });
-            });
-            
-            sidebar.addEventListener('sidebar_closed', (event) => {
-                this.dispatchEvent({
-                    type: 'viewer_sidebar_closed',
-                    viewerId: viewerId,
-                    sidebar: sidebar,
-                    manager: this
-                });
-            });
-            
-            console.log(`Created sidebar for viewer '${viewerId}'`);
+            console.log(`Created and initialized sidebar for viewer '${viewerId}'`);
             
         } catch (error) {
             console.error(`Failed to create sidebar for viewer '${viewerId}':`, error);
@@ -1249,9 +1236,10 @@ export class ViewerManager extends EventDispatcher {
     handleViewerMouseEvent(event, viewer, viewerId, eventType) {
         // Check if the event is from a sidebar control - if so, let it pass through unmodified
         if (this.isSidebarControlEvent(event)) {
-            // Don't interfere with sidebar control events
+            // Don't interfere with sidebar control events - allow default behavior
             console.log(`ViewerManager: Allowing sidebar control event (${eventType}) on element:`, event.target);
-            return true;
+            // Explicitly allow the event to continue with default behavior
+            return; // Early return without preventDefault/stopPropagation
         }
         
         // RENDER OPTIMIZATION: Mark viewer as having activity

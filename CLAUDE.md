@@ -145,3 +145,4 @@ All examples require the full dependency stack - attempting to minimize dependen
 - always write optimized code
 - when having a to do list always stop after checking one off, i must allow you to proceed
 - when writing code in the src/ files always leave a comment "CUSTOM" so i know if something was changed by you
+- all new .js files in src/ directory need to have suffix "-NEW"

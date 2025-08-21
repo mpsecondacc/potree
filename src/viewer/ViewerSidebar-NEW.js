@@ -106,6 +106,7 @@ export class ViewerSidebar extends EventDispatcher {
         this.container = document.createElement('div');
         this.container.className = 'viewer-sidebar';
         this.container.setAttribute('data-viewer-id', this.viewerId);
+        this.container.setAttribute('data-viewer-sidebar', 'true'); // Required for ViewerManager event handling
         
         // Phase 2: Container styling with proper Potree theme
         this.container.style.cssText = `
@@ -171,13 +172,6 @@ export class ViewerSidebar extends EventDispatcher {
             
             // Update any for attributes that reference the old ID
             $container.find(`[for="${oldId}"]`).attr('for', newId);
-            
-            // Update radio button name attributes for selectgroups
-            if (element.tagName === 'INPUT' && element.type === 'radio') {
-                if (element.name === oldId.replace(/_[^_]*$/, '')) {
-                    element.name = newId.replace(/_[^_]*$/, '');
-                }
-            }
         });
         
         console.log(`Element IDs updated for viewer ${this.viewerId}`);
@@ -347,10 +341,28 @@ export class ViewerSidebar extends EventDispatcher {
         const sldEDLOpacity = $container.find(`#sldEDLOpacity_${this.viewerId}`);
         const lblEDLOpacity = $container.find(`#lblEDLOpacity_${this.viewerId}`);
         
-        // EDL Enabled checkbox
-        chkEDLEnabled.prop('checked', this.viewer.getEDLEnabled());
-        chkEDLEnabled.click(() => {
-            this.viewer.setEDLEnabled(chkEDLEnabled.prop("checked"));
+        // EDL Enabled checkbox - match original sidebar.js pattern exactly
+        const initialEDL = this.viewer.getEDLEnabled();
+        console.log(`Initial EDL state: ${initialEDL} for viewer ${this.viewerId}`);
+        chkEDLEnabled[0].checked = initialEDL; // Use DOM property like original
+        
+        // Manual checkbox toggle approach since default behavior is being blocked
+        chkEDLEnabled.click((event) => {
+            console.log(`EDL checkbox click event triggered for viewer ${this.viewerId}`);
+            
+            // Manually toggle the checkbox state since default behavior is being prevented
+            const currentState = chkEDLEnabled.prop("checked");
+            const newState = !currentState;
+            
+            console.log(`Manually toggling EDL checkbox from ${currentState} to ${newState} for viewer ${this.viewerId}`);
+            
+            // Set both DOM and jQuery state
+            chkEDLEnabled.prop("checked", newState);
+            chkEDLEnabled[0].checked = newState;
+            
+            // Apply to viewer
+            this.viewer.setEDLEnabled(newState);
+            console.log(`EDL enabled after manual toggle: ${this.viewer.getEDLEnabled()}`);
         });
         
         // EDL Radius slider
@@ -412,16 +424,31 @@ export class ViewerSidebar extends EventDispatcher {
         elBackground.selectgroup();
 
         elBackground.find("input").click((e) => {
+            console.log(`Background clicked: ${e.target.value} for viewer ${this.viewerId}`);
             this.viewer.setBackground(e.target.value);
         });
 
-        // Set current background selection
+        // Set current background selection - handle null value properly and match original pattern
         const currentBackground = this.viewer.getBackground();
-        $container.find(`input[name=background_options_${this.viewerId}][value=${currentBackground}]`).trigger("click");
+        const backgroundValue = currentBackground === null ? "null" : currentBackground;
+        console.log(`Setting initial background: ${backgroundValue} for viewer ${this.viewerId}`);
+        // Use same pattern as original - no quotes around value if it's not null
+        if (backgroundValue === "null") {
+            $container.find(`input[name=background_options_${this.viewerId}][value="null"]`).trigger("click");
+        } else {
+            $container.find(`input[name=background_options_${this.viewerId}][value=${backgroundValue}]`).trigger("click");
+        }
         
         // Bind viewer events
         this.viewer.addEventListener('background_changed', (event) => {
-            $container.find(`input[name=background_options_${this.viewerId}][value='${this.viewer.getBackground()}']`).prop('checked', true);
+            const newBackground = this.viewer.getBackground();
+            const newValue = newBackground === null ? "null" : newBackground;
+            console.log(`Background changed event: ${newValue} for viewer ${this.viewerId}`);
+            if (newValue === "null") {
+                $container.find(`input[name=background_options_${this.viewerId}][value="null"]`).prop('checked', true);
+            } else {
+                $container.find(`input[name=background_options_${this.viewerId}][value=${newValue}]`).prop('checked', true);
+            }
         });
     }
     
