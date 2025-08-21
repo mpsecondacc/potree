@@ -752,6 +752,161 @@ export class MultiViewer extends EventDispatcher {
     }
     
     /**
+     * Toggle focus lock mode (click-to-focus vs hover-to-interact)
+     * @returns {boolean} New focus lock state
+     */
+    toggleFocusLock() {
+        return this.manager.toggleFocusLock();
+    }
+    
+    /**
+     * Set focus lock mode
+     * @param {boolean} enabled - Whether to enable focus lock
+     * @returns {boolean} New focus lock state
+     */
+    setFocusLock(enabled) {
+        return this.manager.setFocusLock(enabled);
+    }
+    
+    /**
+     * Get current focus lock state
+     * @returns {boolean} Whether focus lock is enabled
+     */
+    isFocusLocked() {
+        return this.manager.isFocusLocked();
+    }
+
+    /**
+     * Get rendering performance statistics
+     * @returns {Object} Performance statistics from render optimizer
+     */
+    getRenderingStats() {
+        return this.manager.getRenderingStats();
+    }
+    
+    /**
+     * Get detailed viewer performance metrics
+     * @returns {Array} Viewer performance metrics
+     */
+    getViewerPerformanceMetrics() {
+        return this.manager.getViewerPerformanceMetrics();
+    }
+    
+    /**
+     * Configure rendering optimization
+     * @param {Object} config - Optimization configuration
+     */
+    configureRenderOptimization(config) {
+        this.manager.configureRenderOptimization(config);
+    }
+    
+    /**
+     * Enable or disable adaptive rendering
+     * @param {boolean} enabled - Whether to enable adaptive rendering
+     */
+    setAdaptiveRendering(enabled) {
+        this.manager.setAdaptiveRendering(enabled);
+    }
+    
+    /**
+     * Force render all viewers (bypass optimization)
+     */
+    forceRenderAll() {
+        this.manager.forceRenderAll();
+    }
+    
+    /**
+     * Get render optimizer instance
+     * @returns {RenderOptimizer} The render optimizer instance
+     */
+    getRenderOptimizer() {
+        return this.manager.getRenderOptimizer();
+    }
+    
+    /**
+     * Get cross-viewer communication system
+     * @returns {CrossViewerCommunication} The communication system instance
+     */
+    getCommunication() {
+        return this.manager.getCommunication();
+    }
+    
+    /**
+     * Send message to viewers on a specific channel
+     * @param {string} channel - Communication channel name
+     * @param {Object} message - Message data
+     * @param {string} fromViewerId - Optional sender viewer ID
+     * @returns {boolean} Success status
+     */
+    sendMessage(channel, message, fromViewerId = null) {
+        return this.manager.sendMessage(channel, message, fromViewerId);
+    }
+    
+    /**
+     * Subscribe viewer to communication channel
+     * @param {string} viewerId - Viewer ID
+     * @param {string} channel - Channel name
+     */
+    subscribeViewerToChannel(viewerId, channel) {
+        this.manager.subscribeViewerToChannel(viewerId, channel);
+    }
+    
+    /**
+     * Add shared geometry across all viewers
+     * @param {Object} geometryData - Geometry data {type, coordinates, style}
+     * @param {string} fromViewerId - Optional source viewer ID
+     * @returns {string} Geometry ID
+     */
+    addSharedGeometry(geometryData, fromViewerId = null) {
+        return this.manager.addSharedGeometry(geometryData, fromViewerId);
+    }
+    
+    /**
+     * Update shared geometry
+     * @param {string} geometryId - Geometry ID to update
+     * @param {Object} updates - Updates to apply
+     * @param {string} fromViewerId - Optional source viewer ID
+     * @returns {boolean} Success status
+     */
+    updateSharedGeometry(geometryId, updates, fromViewerId = null) {
+        return this.manager.updateSharedGeometry(geometryId, updates, fromViewerId);
+    }
+    
+    /**
+     * Remove shared geometry
+     * @param {string} geometryId - Geometry ID to remove
+     * @param {string} fromViewerId - Optional source viewer ID
+     * @returns {boolean} Success status
+     */
+    removeSharedGeometry(geometryId, fromViewerId = null) {
+        return this.manager.removeSharedGeometry(geometryId, fromViewerId);
+    }
+    
+    /**
+     * Get shared state across all viewers
+     * @returns {Object} Shared state object
+     */
+    getSharedState() {
+        return this.manager.getSharedState();
+    }
+    
+    /**
+     * Get communication statistics
+     * @returns {Object} Communication stats
+     */
+    getCommunicationStats() {
+        return this.manager.getCommunicationStats();
+    }
+    
+    /**
+     * Enable/disable cross-viewer communication
+     * @param {boolean} enabled - Whether to enable communication
+     */
+    setCommunicationEnabled(enabled) {
+        this.manager.setCommunicationEnabled(enabled);
+    }
+
+    /**
      * Get manager status and statistics
      * @returns {Object} Status information
      */
@@ -769,7 +924,8 @@ export class MultiViewer extends EventDispatcher {
                 drawingSystem: !!this.drawingSystem,
                 identification: true,
                 naming: true,
-                search: true
+                search: true,
+                focusLock: true
             },
             registry: {
                 totalViewers: registryStats.totalViewers,
@@ -1078,6 +1234,115 @@ export class MultiViewer extends EventDispatcher {
         return this.drawingSystem;
     }
     
+    // =============================================================================
+    // SIDEBAR API METHODS
+    // =============================================================================
+    
+    /**
+     * Get sidebar instance for a viewer
+     * @param {string} viewerId - The viewer ID
+     * @returns {ViewerSidebar|null} Sidebar instance or null if not found
+     */
+    getViewerSidebar(viewerId) {
+        return this.manager.viewerSidebars.get(viewerId) || null;
+    }
+    
+    /**
+     * Toggle sidebar for a specific viewer
+     * @param {string} viewerId - The viewer ID
+     * @returns {boolean} New sidebar state (true = open, false = closed)
+     */
+    toggleViewerSidebar(viewerId) {
+        const sidebar = this.getViewerSidebar(viewerId);
+        if (!sidebar) {
+            console.warn(`No sidebar found for viewer '${viewerId}'`);
+            return false;
+        }
+        
+        return sidebar.toggle();
+    }
+    
+    /**
+     * Open sidebar for a specific viewer
+     * @param {string} viewerId - The viewer ID
+     * @returns {boolean} Success status
+     */
+    openViewerSidebar(viewerId) {
+        const sidebar = this.getViewerSidebar(viewerId);
+        if (!sidebar) {
+            console.warn(`No sidebar found for viewer '${viewerId}'`);
+            return false;
+        }
+        
+        sidebar.open();
+        return true;
+    }
+    
+    /**
+     * Close sidebar for a specific viewer
+     * @param {string} viewerId - The viewer ID
+     * @returns {boolean} Success status
+     */
+    closeViewerSidebar(viewerId) {
+        const sidebar = this.getViewerSidebar(viewerId);
+        if (!sidebar) {
+            console.warn(`No sidebar found for viewer '${viewerId}'`);
+            return false;
+        }
+        
+        sidebar.close();
+        return true;
+    }
+    
+    /**
+     * Close all viewer sidebars
+     * @returns {number} Number of sidebars closed
+     */
+    closeAllSidebars() {
+        let closedCount = 0;
+        this.manager.viewerSidebars.forEach((sidebar, viewerId) => {
+            if (sidebar.isOpen()) {
+                sidebar.close();
+                closedCount++;
+            }
+        });
+        return closedCount;
+    }
+    
+    /**
+     * Check if a viewer sidebar is open
+     * @param {string} viewerId - The viewer ID
+     * @returns {boolean} True if sidebar is open
+     */
+    isViewerSidebarOpen(viewerId) {
+        const sidebar = this.getViewerSidebar(viewerId);
+        return sidebar ? sidebar.isOpen() : false;
+    }
+    
+    /**
+     * Get sidebar statistics
+     * @returns {Object} Sidebar statistics
+     */
+    getSidebarStats() {
+        let openCount = 0;
+        let totalCount = 0;
+        const sidebarStates = {};
+        
+        this.manager.viewerSidebars.forEach((sidebar, viewerId) => {
+            totalCount++;
+            const isOpen = sidebar.isOpen();
+            if (isOpen) openCount++;
+            sidebarStates[viewerId] = isOpen;
+        });
+        
+        return {
+            totalSidebars: totalCount,
+            openSidebars: openCount,
+            closedSidebars: totalCount - openCount,
+            sidebarStates: sidebarStates
+        };
+    }
+
     /**
      * Cleanup and destroy multi-viewer
      */

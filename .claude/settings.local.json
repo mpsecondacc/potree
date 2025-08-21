@@ -12,7 +12,9 @@
       "Bash(npm run build:*)",
       "Bash(grep:*)",
       "Bash(python:*)",
-      "Bash(npx gulp:*)"
+      "Bash(npx gulp:*)",
+      "Bash(rg:*)",
+      "Bash(cp:*)"
     ],
     "deny": [],
     "ask": [],

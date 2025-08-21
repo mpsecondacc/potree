@@ -15,6 +15,7 @@
     
     <link rel="stylesheet" type="text/css" href="./libs/spectrum/spectrum.css">
     <link rel="stylesheet" type="text/css" href="./libs/jstree/themes/mixed/style.css">
+    <link rel="stylesheet" type="text/css" href="./build/potree/potree.css">
     <style>
         body {
             margin: 0;
@@ -98,14 +99,29 @@
     <div class="controls">
         <button onclick="testCreateMultiViewer()" id="createBtn">Create MultiViewer</button>
         <button onclick="testCreateViewers()" id="createViewersBtn" disabled>Create Viewers (2)</button>
-        <button onclick="testLoadPointCloud()" id="loadPCBtn" disabled>Load Point Cloud</button>
         <button onclick="testLayout1x2()" id="layout1x2Btn" disabled>Layout Main+2 Side</button>
         <button onclick="testLayout2x2()" id="layout2x2Btn" disabled>Layout 2x2 (4 viewers)</button>
         <button onclick="toggleSync()" id="toggleSyncBtn" disabled>Toggle Sync (OFF)</button>
+        <button onclick="toggleLockFocus()" id="lockFocusBtn" disabled>Lock Focus (OFF)</button>
         <button onclick="testAddViewer()" id="addViewerBtn" disabled>Add Viewer</button>
         <button onclick="testRemoveViewer()" id="removeViewerBtn" disabled>Remove Viewer</button>
         <button onclick="testIdentification()" id="identificationBtn" disabled>Test Identification</button>
         <button onclick="testStatus()" id="statusBtn" disabled>Show Status</button>
+        
+        <!-- Performance Monitoring Controls -->
+        <br><br><strong>Performance Monitoring:</strong><br>
+        <button onclick="testRenderingPerformance()" id="performanceBtn" disabled>Performance Test</button>
+        <button onclick="startPerformanceMonitoring()" id="startMonitorBtn" disabled>Start Monitor</button>
+        <button onclick="stopPerformanceMonitoring()" id="stopMonitorBtn" disabled>Stop Monitor</button>
+        <button onclick="testForceRender()" id="forceRenderBtn" disabled>Force Render</button>
+        
+        <!-- Cross-Viewer Communication Controls -->
+        <br><br><strong>Cross-Viewer Communication:</strong><br>
+        <button onclick="testCommunicationSystem()" id="commSystemBtn" disabled>Test Communication</button>
+        <button onclick="testSharedGeometry()" id="sharedGeomBtn" disabled>Test Shared Geometry</button>
+        <button onclick="testDrawLine()" id="drawLineBtn" disabled>Draw Shared Line</button>
+        <button onclick="testClearShared()" id="clearSharedBtn" disabled>Clear Shared Objects</button>
+        <button onclick="testCommStats()" id="commStatsBtn" disabled>Communication Stats</button>
         
         <!-- Configuration Persistence Controls -->
         <br><br><strong>Configuration Persistence:</strong><br>
@@ -116,6 +132,13 @@
         <input type="file" id="importFileInput" accept=".json" style="display: none;" onchange="testImportConfiguration(this)">
         <button onclick="document.getElementById('importFileInput').click()" id="importConfigBtn" disabled>Import Config</button>
         <button onclick="testDeleteConfiguration()" id="deleteConfigBtn" disabled>Delete Config</button>
+        
+        <!-- Viewer Sidebar Controls -->
+        <br><br><strong>Viewer Sidebars:</strong><br>
+        <button onclick="testOpenAllSidebars()" id="openAllSidebarsBtn" disabled>Open All Sidebars</button>
+        <button onclick="testCloseAllSidebars()" id="closeAllSidebarsBtn" disabled>Close All Sidebars</button>
+        <button onclick="testSidebarStats()" id="sidebarStatsBtn" disabled>Sidebar Stats</button>
+        <button onclick="testSidebarAPI()" id="sidebarAPIBtn" disabled>Test Sidebar API</button>
         
         <button onclick="testDestroy()" id="destroyBtn" disabled>Destroy</button>
     </div>
@@ -280,12 +303,28 @@
                 multiViewer.setLayout('1x2');
                 log('✓ Layout applied: 2 viewers side by side');
                 
-                enableButton('loadPCBtn');
+                // Auto-load point cloud into all viewers
+                log('Auto-loading sample point cloud...');
+                await autoLoadPointCloud();
+                
                 enableButton('toggleSyncBtn');
+                enableButton('lockFocusBtn');
                 enableButton('addViewerBtn');
                 enableButton('removeViewerBtn');
                 enableButton('identificationBtn');
                 enableButton('statusBtn');
+                
+                // Enable performance monitoring buttons
+                enableButton('performanceBtn');
+                enableButton('startMonitorBtn');
+                enableButton('forceRenderBtn');
+                
+                // Enable cross-viewer communication buttons
+                enableButton('commSystemBtn');
+                enableButton('sharedGeomBtn');
+                enableButton('drawLineBtn');
+                enableButton('clearSharedBtn');
+                enableButton('commStatsBtn');
                 
                 // Enable configuration persistence buttons
                 enableButton('saveConfigBtn');
@@ -295,86 +334,72 @@
                 enableButton('importConfigBtn');
                 enableButton('deleteConfigBtn');
                 
+                // Enable sidebar buttons
+                enableButton('openAllSidebarsBtn');
+                enableButton('closeAllSidebarsBtn');
+                enableButton('sidebarStatsBtn');
+                enableButton('sidebarAPIBtn');
+                
             } catch (error) {
                 log(`✗ Error creating viewers: ${error.message}`);
                 console.error(error);
             }
         };
         
-        // Test 3: Load Point Cloud (with Resource Sharing)
-        window.testLoadPointCloud = async function() {
+        // Auto-load point cloud function (extracted from removed testLoadPointCloud)
+        async function autoLoadPointCloud() {
             if (!multiViewer || testViewers.length === 0) {
-                log('✗ Need viewers to load point cloud');
-                return;
+                log('⚠️ Skipping auto-load: No viewers available');
+                return false;
             }
             
             try {
-                log('Loading sample point cloud with resource sharing...');
-                
                 // Use the same point cloud as in classifications.html example
                 const pointCloudUrl = "http://5.9.65.151/mschuetz/potree/resources/pointclouds/opentopography/CA13_1.4/cloud.js";
                 const pointCloudName = 'CA13';
                 
                 log(`Loading point cloud: ${pointCloudName}`);
-                log(`URL: ${pointCloudUrl}`);
-                log(`Viewers: ${testViewers.length}`);
-                log('Using SharedResourceManager - 1 dataset will be shared across all viewers');
-                log('This may take a few seconds...');
-                
-                // Get memory stats before loading
-                const statsBefore = multiViewer.getMemoryStats();
-                log(`Memory before loading:`);
-                log(`  Point clouds in cache: ${statsBefore.pointCloudCount}`);
-                log(`  Memory usage: ${(statsBefore.total / 1024 / 1024).toFixed(2)} MB`);
+                log('Using SharedResourceManager - 1 dataset shared across all viewers');
                 
                 // Use resource sharing to load point cloud into all viewers
                 const results = await multiViewer.loadPointCloud(pointCloudUrl, pointCloudName);
                 
-                // Get memory stats after loading
-                const statsAfter = multiViewer.getMemoryStats();
-                log(`Memory after loading:`);
-                log(`  Point clouds in cache: ${statsAfter.pointCloudCount}`);
-                log(`  Memory usage: ${(statsAfter.total / 1024 / 1024).toFixed(2)} MB`);
-                log(`  Sharing efficiency: ${statsAfter.sharingEfficiency.toFixed(2)}x`);
-                log(`  Memory saved: ${((testViewers.length - 1) / testViewers.length * 100).toFixed(1)}%`);
-                
                 log('✓ Point cloud loaded successfully with resource sharing!');
                 log(`✓ 1 dataset shared across ${testViewers.length} viewers`);
-                log('✓ All viewers auto-zoomed to point cloud extents');
                 
-                // Verify each viewer has the point cloud
-                testViewers.forEach((viewer, index) => {
-                    if (viewer.scene) {
-                        const pointClouds = viewer.scene.pointclouds;
-                        log(`✓ Viewer ${index + 1}: ${pointClouds ? pointClouds.length : 0} point cloud(s)`);
-                        
-                        if (pointClouds && pointClouds.length > 0) {
-                            const pc = pointClouds[0];
-                            const isShared = pc.material && pc.material._isSharedResource;
-                            log(`  Resource type: ${isShared ? 'SHARED' : 'independent'}`);
-                            if (isShared) {
-                                log(`  Viewer ID: ${pc.material._viewerId}`);
-                                log(`  Resource ID: ${pc.material._sharedResourceId}`);
-                            }
-                        }
-                    }
-                });
+                // Wait a moment for point clouds to be fully loaded and then connect sidebar controls
+                setTimeout(() => {
+                    log('✓ Reconnecting sidebar controls to loaded point clouds...');
+                    reconnectSidebarControls();
+                }, 1000);
                 
-                log('');
-                log('🎉 Resource Sharing Success!');
-                log('✓ Single point cloud dataset loaded once');
-                log(`✓ ${testViewers.length} independent material instances created`);
-                log('✓ Each viewer can have different visual settings');
-                log('✓ Memory usage minimized through intelligent sharing');
-                
+                return true;
                 
             } catch (error) {
-                log(`✗ Error loading point cloud: ${error.message}`);
+                log(`⚠️ Auto-load failed: ${error.message}`);
                 log('This is normal if the sample URL is not accessible');
                 log('You can still test other features');
-                console.error(error);
+                return false;
             }
-        };
+        }
+        
+        // Reconnect sidebar controls after point cloud loading
+        function reconnectSidebarControls() {
+            try {
+                // Get all viewer sidebars and refresh their connections
+                const viewerIds = multiViewer.getViewerIds();
+                viewerIds.forEach(viewerId => {
+                    const sidebar = multiViewer.getViewerSidebar(viewerId);
+                    if (sidebar && sidebar.connectAppearanceControls) {
+                        log(`Reconnecting controls for viewer ${viewerId}...`);
+                        sidebar.connectAppearanceControls();
+                    }
+                });
+                log('✓ Sidebar controls reconnected to loaded point clouds');
+            } catch (error) {
+                log(`⚠️ Error reconnecting sidebar controls: ${error.message}`);
+            }
+        }
         
         // Test 4: Layout Main+2 Side (3 viewers: main, top, bottom)
         window.testLayout1x2 = async function() {
@@ -419,9 +444,13 @@
                 log('✓ Main viewer: full height, 2/3 width');
                 log('✓ Side viewers: 1/2 height each, 1/3 width');
                 
+                // Auto-load point cloud into all viewers
+                log('Auto-loading sample point cloud...');
+                await autoLoadPointCloud();
+                
                 enableButton('layout2x2Btn');
-                enableButton('loadPCBtn');
                 enableButton('toggleSyncBtn');
+                enableButton('lockFocusBtn');
                 enableButton('addViewerBtn');
                 enableButton('removeViewerBtn');
                 enableButton('identificationBtn');
@@ -482,8 +511,12 @@
                 log('✓ All 4 viewers arranged in 2x2 grid');
                 log('✓ Each viewer: 1/2 width, 1/2 height');
                 
-                enableButton('loadPCBtn');
+                // Auto-load point cloud into all viewers
+                log('Auto-loading sample point cloud...');
+                await autoLoadPointCloud();
+                
                 enableButton('toggleSyncBtn');
+                enableButton('lockFocusBtn');
                 enableButton('addViewerBtn');
                 enableButton('removeViewerBtn');
                 enableButton('identificationBtn');
@@ -573,6 +606,18 @@
                 if (viewer) {
                     // Add viewer to test array so point cloud loading works
                     testViewers.push(viewer);
+                    
+                    // Load point cloud into the new viewer
+                    try {
+                        const pointCloudUrl = "http://5.9.65.151/mschuetz/potree/resources/pointclouds/opentopography/CA13_1.4/cloud.js";
+                        const pointCloudName = 'CA13';
+                        
+                        log(`Loading point cloud into new viewer '${viewerId}'...`);
+                        await viewer.loadPointCloud(pointCloudUrl, pointCloudName);
+                        log(`✓ Point cloud loaded into viewer '${viewerId}'`);
+                    } catch (error) {
+                        log(`⚠️ Failed to load point cloud into new viewer: ${error.message}`);
+                    }
                     
                     const newCount = multiViewer.getViewerCount();
                     log(`✓ Successfully added viewer '${viewerId}'`);
@@ -849,7 +894,577 @@
             }
         };
         
-        // Test 8: Cleanup
+        // Test 8: Performance Monitoring and Optimization
+        window.testRenderingPerformance = function() {
+            if (!multiViewer) {
+                log('✗ MultiViewer not created yet');
+                return;
+            }
+            
+            try {
+                log('\n=== Rendering Performance Test ===');
+                
+                // Test 1: Get rendering statistics
+                const renderStats = multiViewer.getRenderingStats();
+                if (renderStats) {
+                    log(`Current FPS: ${renderStats.fps.current.toFixed(1)}`);
+                    log(`Average FPS: ${renderStats.fps.average.toFixed(1)}`);
+                    log(`Target FPS: ${renderStats.fps.target}`);
+                    log(`Frame time: ${renderStats.fps.frameTime.toFixed(2)}ms`);
+                    log(`Render budget utilization: ${renderStats.budget.utilization.toFixed(1)}%`);
+                    log(`Total viewers: ${renderStats.viewers.total}`);
+                    log(`Visible viewers: ${renderStats.viewers.visible}`);
+                    log(`Active viewers: ${renderStats.viewers.active}`);
+                    log(`Scheduled viewers: ${renderStats.viewers.scheduled}`);
+                    log(`Global quality level: ${renderStats.quality.global}`);
+                    log(`Adaptive rendering: ${renderStats.quality.adaptive}`);
+                } else {
+                    log('✗ Rendering statistics not available');
+                }
+                
+                // Test 2: Get viewer performance metrics
+                const viewerMetrics = multiViewer.getViewerPerformanceMetrics();
+                if (viewerMetrics && viewerMetrics.length > 0) {
+                    log('\nViewer Performance Metrics:');
+                    viewerMetrics.forEach(metrics => {
+                        log(`  ${metrics.id}:`);
+                        log(`    Visible: ${metrics.isVisible}`);
+                        log(`    Active: ${metrics.isActive}`);
+                        log(`    Visibility ratio: ${(metrics.visibilityRatio * 100).toFixed(1)}%`);
+                        log(`    Render count: ${metrics.renderCount}`);
+                        log(`    Avg render time: ${metrics.avgRenderTime.toFixed(2)}ms`);
+                        log(`    Frame skips: ${metrics.frameSkipCount}`);
+                        log(`    Quality level: ${metrics.qualityLevel}`);
+                        log(`    Needs render: ${metrics.needsRender}`);
+                    });
+                } else {
+                    log('No viewer performance metrics available');
+                }
+                
+                // Test 3: Configure optimization settings
+                log('\nTesting optimization configuration...');
+                multiViewer.configureRenderOptimization({
+                    targetFPS: 60,
+                    adaptiveRendering: true,
+                    visibilityBasedRendering: true
+                });
+                log('✓ Optimization settings configured');
+                
+                // Test 4: Test adaptive rendering toggle
+                log('\nTesting adaptive rendering controls...');
+                const currentAdaptive = multiViewer.getRenderingStats()?.quality.adaptive;
+                multiViewer.setAdaptiveRendering(!currentAdaptive);
+                log(`✓ Adaptive rendering toggled to: ${!currentAdaptive}`);
+                
+                // Restore original state
+                setTimeout(() => {
+                    multiViewer.setAdaptiveRendering(currentAdaptive);
+                    log(`✓ Adaptive rendering restored to: ${currentAdaptive}`);
+                }, 1000);
+                
+                // Test 5: Memory monitoring (if available)
+                if (window.performance && window.performance.memory) {
+                    const memory = window.performance.memory;
+                    const memoryMB = {
+                        used: Math.round(memory.usedJSHeapSize / (1024 * 1024)),
+                        total: Math.round(memory.totalJSHeapSize / (1024 * 1024)),
+                        limit: Math.round(memory.jsHeapSizeLimit / (1024 * 1024))
+                    };
+                    log(`\nMemory Usage:`);
+                    log(`  Used: ${memoryMB.used}MB`);
+                    log(`  Total: ${memoryMB.total}MB`);
+                    log(`  Limit: ${memoryMB.limit}MB`);
+                    log(`  Utilization: ${((memoryMB.used / memoryMB.limit) * 100).toFixed(1)}%`);
+                }
+                
+                log('✓ Performance monitoring test completed');
+                
+            } catch (error) {
+                log(`✗ Performance monitoring test failed: ${error.message}`);
+            }
+        };
+        
+        // Performance monitoring interval function
+        let performanceMonitorInterval = null;
+        
+        window.startPerformanceMonitoring = function() {
+            if (performanceMonitorInterval) {
+                log('Performance monitoring already running');
+                return;
+            }
+            
+            if (!multiViewer) {
+                log('✗ MultiViewer not created yet');
+                return;
+            }
+            
+            log('\n=== Starting Real-time Performance Monitoring ===');
+            
+            performanceMonitorInterval = setInterval(() => {
+                const stats = multiViewer.getRenderingStats();
+                if (stats) {
+                    // Clear previous monitoring output
+                    const existing = document.getElementById('performance-monitor');
+                    if (existing) existing.remove();
+                    
+                    // Create performance display
+                    const monitor = document.createElement('div');
+                    monitor.id = 'performance-monitor';
+                    monitor.style.cssText = `
+                        position: fixed; top: 10px; right: 10px; 
+                        background: rgba(0,0,0,0.8); color: white; 
+                        padding: 10px; border-radius: 5px; font-family: monospace;
+                        font-size: 12px; z-index: 10000; min-width: 200px;
+                    `;
+                    
+                    monitor.innerHTML = `
+                        <strong>Performance Monitor</strong><br>
+                        FPS: ${stats.fps.current.toFixed(1)} (avg: ${stats.fps.average.toFixed(1)})<br>
+                        Frame: ${stats.fps.frameTime.toFixed(1)}ms<br>
+                        Budget: ${stats.budget.utilization.toFixed(1)}%<br>
+                        Quality: ${stats.quality.global}<br>
+                        Viewers: ${stats.viewers.visible}/${stats.viewers.total}<br>
+                        Adaptive: ${stats.quality.adaptive ? 'ON' : 'OFF'}
+                    `;
+                    
+                    document.body.appendChild(monitor);
+                }
+            }, 1000);
+            
+            // Update button states
+            disableButton('startMonitorBtn');
+            enableButton('stopMonitorBtn');
+            
+            log('✓ Real-time performance monitoring started (top-right corner)');
+        };
+        
+        window.stopPerformanceMonitoring = function() {
+            if (performanceMonitorInterval) {
+                clearInterval(performanceMonitorInterval);
+                performanceMonitorInterval = null;
+                
+                const existing = document.getElementById('performance-monitor');
+                if (existing) existing.remove();
+                
+                // Update button states
+                enableButton('startMonitorBtn');
+                disableButton('stopMonitorBtn');
+                
+                log('✓ Performance monitoring stopped');
+            } else {
+                log('Performance monitoring not running');
+            }
+        };
+        
+        window.testForceRender = function() {
+            if (!multiViewer) {
+                log('✗ MultiViewer not created yet');
+                return;
+            }
+            
+            try {
+                log('\n=== Force Render Test ===');
+                log('Forcing render of all viewers (bypassing optimization)...');
+                multiViewer.forceRenderAll();
+                log('✓ Force render completed');
+                
+            } catch (error) {
+                log(`✗ Force render test failed: ${error.message}`);
+            }
+        };
+        
+        // Test 9: Cross-Viewer Communication System
+        window.testCommunicationSystem = function() {
+            if (!multiViewer) {
+                log('✗ MultiViewer not created yet');
+                return;
+            }
+            
+            try {
+                log('\n=== Cross-Viewer Communication Test ===');
+                
+                // Test 1: Get communication system
+                const communication = multiViewer.getCommunication();
+                if (communication) {
+                    log('✓ Communication system available');
+                } else {
+                    log('✗ Communication system not available');
+                    return;
+                }
+                
+                // Test 2: Get communication stats
+                const stats = multiViewer.getCommunicationStats();
+                if (stats) {
+                    log(`Communication enabled: ${stats.enabled}`);
+                    log(`Registered viewers: ${stats.registeredViewers}`);
+                    log(`Available channels: ${stats.channels}`);
+                    log(`Shared geometry: ${stats.sharedGeometry}`);
+                    log(`Shared annotations: ${stats.sharedAnnotations}`);
+                    log(`Shared measurements: ${stats.sharedMeasurements}`);
+                } else {
+                    log('✗ Could not get communication stats');
+                }
+                
+                // Test 3: Test messaging system
+                log('\nTesting messaging system...');
+                const messageSent = multiViewer.sendMessage('test', {
+                    type: 'hello',
+                    message: 'Test message from communication system'
+                });
+                log(`Message sent: ${messageSent}`);
+                
+                // Test 4: Subscribe viewers to channels
+                log('\nTesting channel subscriptions...');
+                const viewers = multiViewer.getAllViewers();
+                Object.keys(viewers).forEach(viewerId => {
+                    multiViewer.subscribeViewerToChannel(viewerId, 'test');
+                    log(`✓ Subscribed viewer '${viewerId}' to 'test' channel`);
+                });
+                
+                // Test 5: Get shared state
+                log('\nTesting shared state...');
+                const sharedState = multiViewer.getSharedState();
+                if (sharedState) {
+                    log(`Shared state version: ${sharedState.version}`);
+                    log(`Last modified: ${new Date(sharedState.lastModified).toLocaleString()}`);
+                    log(`Active tool: ${sharedState.activeTool || 'none'}`);
+                } else {
+                    log('✗ Could not get shared state');
+                }
+                
+                log('✓ Communication system test completed');
+                
+            } catch (error) {
+                log(`✗ Communication system test failed: ${error.message}`);
+            }
+        };
+        
+        window.testSharedGeometry = function() {
+            if (!multiViewer) {
+                log('✗ MultiViewer not created yet');
+                return;
+            }
+            
+            try {
+                log('\n=== Shared Geometry Test ===');
+                
+                // Test different geometry types
+                const geometryTests = [
+                    {
+                        type: 'point',
+                        coordinates: [{x: 694400, y: 3916300, z: 100}],
+                        style: {color: 0xff0000, size: 10}
+                    },
+                    {
+                        type: 'line',
+                        coordinates: [
+                            {x: 694300, y: 3916300, z: 100},
+                            {x: 694500, y: 3916400, z: 150}
+                        ],
+                        style: {color: 0x00ff00, lineWidth: 3}
+                    },
+                    {
+                        type: 'polyline',
+                        coordinates: [
+                            {x: 694300, y: 3916200, z: 80},
+                            {x: 694400, y: 3916250, z: 90},
+                            {x: 694500, y: 3916200, z: 100},
+                            {x: 694600, y: 3916300, z: 110}
+                        ],
+                        style: {color: 0x0000ff, lineWidth: 2}
+                    }
+                ];
+                
+                log('Adding test geometries...');
+                
+                geometryTests.forEach((geometry, index) => {
+                    const geometryId = multiViewer.addSharedGeometry(geometry);
+                    if (geometryId) {
+                        log(`✓ Added ${geometry.type} geometry: ${geometryId}`);
+                    } else {
+                        log(`✗ Failed to add ${geometry.type} geometry`);
+                    }
+                });
+                
+                // Test geometry update
+                setTimeout(() => {
+                    log('\nTesting geometry updates...');
+                    const sharedState = multiViewer.getSharedState();
+                    if (sharedState && sharedState.geometry) {
+                        const geometryIds = Object.keys(sharedState.geometry);
+                        if (geometryIds.length > 0) {
+                            const updateSuccess = multiViewer.updateSharedGeometry(geometryIds[0], {
+                                style: { color: 0xffff00, opacity: 0.8 }
+                            });
+                            log(`✓ Updated geometry style: ${updateSuccess}`);
+                        }
+                    }
+                }, 1000);
+                
+                log('✓ Shared geometry test initiated');
+                
+            } catch (error) {
+                log(`✗ Shared geometry test failed: ${error.message}`);
+            }
+        };
+        
+        window.testDrawLine = function() {
+            if (!multiViewer) {
+                log('✗ MultiViewer not created yet');
+                return;
+            }
+            
+            try {
+                log('\n=== Draw Shared Line Test ===');
+                log('Drawing a line that should appear in all viewers...');
+                
+                // Create a simple line in 3D space
+                const lineData = {
+                    type: 'line',
+                    coordinates: [
+                        {x: 694400, y: 3916300, z: 50},  // Start point
+                        {x: 694600, y: 3916400, z: 200}  // End point
+                    ],
+                    style: {
+                        color: 0xff6600, // Orange
+                        lineWidth: 4,
+                        opacity: 1
+                    },
+                    properties: {
+                        name: 'Test Line',
+                        description: 'A test line drawn across all viewers',
+                        creator: 'user'
+                    }
+                };
+                
+                const geometryId = multiViewer.addSharedGeometry(lineData, 'manual_test');
+                
+                if (geometryId) {
+                    log(`✓ Drew shared line: ${geometryId}`);
+                    log('✓ Line should now be visible in all active viewers');
+                    log('✓ Line coordinates: (694400, 3916300, 50) to (694600, 3916400, 200)');
+                    
+                    // Store for later removal
+                    window.lastDrawnLineId = geometryId;
+                    
+                } else {
+                    log('✗ Failed to draw shared line');
+                }
+                
+            } catch (error) {
+                log(`✗ Draw line test failed: ${error.message}`);
+            }
+        };
+        
+        window.testClearShared = function() {
+            if (!multiViewer) {
+                log('✗ MultiViewer not created yet');
+                return;
+            }
+            
+            try {
+                log('\n=== Clear Shared Objects Test ===');
+                
+                const sharedState = multiViewer.getSharedState();
+                if (!sharedState || !sharedState.geometry) {
+                    log('No shared geometry to clear');
+                    return;
+                }
+                
+                const geometryIds = Object.keys(sharedState.geometry);
+                log(`Found ${geometryIds.length} shared geometries to clear`);
+                
+                let removedCount = 0;
+                geometryIds.forEach(geometryId => {
+                    const success = multiViewer.removeSharedGeometry(geometryId, 'clear_test');
+                    if (success) {
+                        removedCount++;
+                        log(`✓ Removed geometry: ${geometryId}`);
+                    } else {
+                        log(`✗ Failed to remove geometry: ${geometryId}`);
+                    }
+                });
+                
+                log(`✓ Cleared ${removedCount}/${geometryIds.length} shared geometries`);
+                
+                // Clear stored reference
+                if (window.lastDrawnLineId) {
+                    delete window.lastDrawnLineId;
+                }
+                
+            } catch (error) {
+                log(`✗ Clear shared objects test failed: ${error.message}`);
+            }
+        };
+        
+        window.testCommStats = function() {
+            if (!multiViewer) {
+                log('✗ MultiViewer not created yet');
+                return;
+            }
+            
+            try {
+                log('\n=== Communication Statistics Test ===');
+                
+                const stats = multiViewer.getCommunicationStats();
+                if (!stats) {
+                    log('✗ Communication statistics not available');
+                    return;
+                }
+                
+                log('Communication System Status:');
+                log(`  Enabled: ${stats.enabled}`);
+                log(`  Registered viewers: ${stats.registeredViewers}`);
+                log(`  Available channels: ${stats.channels}`);
+                log(`  Message history length: ${stats.messageHistory}`);
+                log(`  Last modified: ${new Date(stats.lastModified).toLocaleString()}`);
+                
+                log('\nShared Objects:');
+                log(`  Geometry objects: ${stats.sharedGeometry}`);
+                log(`  Annotation objects: ${stats.sharedAnnotations}`);
+                log(`  Measurement objects: ${stats.sharedMeasurements}`);
+                
+                // Get detailed shared state
+                const sharedState = multiViewer.getSharedState();
+                if (sharedState) {
+                    log('\nDetailed Shared State:');
+                    if (sharedState.geometry && Object.keys(sharedState.geometry).length > 0) {
+                        log('  Geometry objects:');
+                        Object.entries(sharedState.geometry).forEach(([id, geom]) => {
+                            log(`    ${id}: ${geom.type} (${geom.coordinates.length} points) - ${geom.style.color.toString(16)}`);
+                        });
+                    }
+                    
+                    if (sharedState.activeLayers && sharedState.activeLayers.length > 0) {
+                        log(`  Active layers: ${sharedState.activeLayers.join(', ')}`);
+                    }
+                    
+                    log(`  Active tool: ${sharedState.activeTool || 'none'}`);
+                    log(`  Active drawing session: ${sharedState.activeDrawingSession || 'none'}`);
+                }
+                
+                log('✓ Communication statistics test completed');
+                
+            } catch (error) {
+                log(`✗ Communication statistics test failed: ${error.message}`);
+            }
+        };
+
+        // Test Sidebar Functions
+        window.testOpenAllSidebars = function() {
+            if (!multiViewer) {
+                log('✗ MultiViewer not created yet');
+                return;
+            }
+            
+            try {
+                // Get actual viewer IDs from the multiViewer instead of using testViewers array
+                const viewerIds = multiViewer.getViewerIds();
+                log(`Available viewer IDs: ${viewerIds.join(', ')}`);
+                
+                let openedCount = 0;
+                viewerIds.forEach(viewerId => {
+                    try {
+                        const opened = multiViewer.openViewerSidebar(viewerId);
+                        if (opened) {
+                            openedCount++;
+                            log(`✓ Opened sidebar for viewer '${viewerId}'`);
+                        } else {
+                            log(`- Sidebar for viewer '${viewerId}' was already open`);
+                        }
+                    } catch (err) {
+                        log(`✗ Failed to open sidebar for viewer '${viewerId}': ${err.message}`);
+                    }
+                });
+                log(`✓ Opened ${openedCount} new sidebars (total attempts: ${viewerIds.length})`);
+            } catch (error) {
+                log(`✗ Open all sidebars failed: ${error.message}`);
+                console.error('Full error:', error);
+            }
+        };
+        
+        window.testCloseAllSidebars = function() {
+            if (!multiViewer) {
+                log('✗ MultiViewer not created yet');
+                return;
+            }
+            
+            try {
+                const closedCount = multiViewer.closeAllSidebars();
+                log(`✓ Closed ${closedCount} sidebars`);
+            } catch (error) {
+                log(`✗ Close all sidebars failed: ${error.message}`);
+            }
+        };
+        
+        window.testSidebarStats = function() {
+            if (!multiViewer) {
+                log('✗ MultiViewer not created yet');
+                return;
+            }
+            
+            try {
+                const stats = multiViewer.getSidebarStats();
+                log('\n=== Sidebar Statistics ===');
+                log(`Total sidebars: ${stats.totalSidebars}`);
+                log(`Open sidebars: ${stats.openSidebars}`);
+                log(`Closed sidebars: ${stats.closedSidebars}`);
+                log('Sidebar states:');
+                Object.entries(stats.sidebarStates).forEach(([viewerId, isOpen]) => {
+                    log(`  ${viewerId}: ${isOpen ? 'open' : 'closed'}`);
+                });
+            } catch (error) {
+                log(`✗ Sidebar stats failed: ${error.message}`);
+            }
+        };
+        
+        window.testSidebarAPI = function() {
+            if (!multiViewer || testViewers.length === 0) {
+                log('✗ Need viewers to test sidebar API');
+                return;
+            }
+            
+            try {
+                log('\n=== Sidebar API Test ===');
+                const viewerId = testViewers[0];
+                
+                // Test getting sidebar instance
+                const sidebar = multiViewer.getViewerSidebar(viewerId);
+                if (sidebar) {
+                    log(`✓ Got sidebar instance for viewer '${viewerId}'`);
+                } else {
+                    log(`✗ No sidebar found for viewer '${viewerId}'`);
+                    return;
+                }
+                
+                // Test checking if sidebar is open
+                const initialState = multiViewer.isViewerSidebarOpen(viewerId);
+                log(`Initial sidebar state: ${initialState ? 'open' : 'closed'}`);
+                
+                // Test opening sidebar
+                const openResult = multiViewer.openViewerSidebar(viewerId);
+                log(`Open sidebar result: ${openResult}`);
+                
+                // Verify it's open
+                const afterOpenState = multiViewer.isViewerSidebarOpen(viewerId);
+                log(`After open state: ${afterOpenState ? 'open' : 'closed'}`);
+                
+                // Test closing sidebar
+                const closeResult = multiViewer.closeViewerSidebar(viewerId);
+                log(`Close sidebar result: ${closeResult}`);
+                
+                // Verify it's closed
+                const afterCloseState = multiViewer.isViewerSidebarOpen(viewerId);
+                log(`After close state: ${afterCloseState ? 'open' : 'closed'}`);
+                
+                log('✓ Sidebar API test completed');
+                
+            } catch (error) {
+                log(`✗ Sidebar API test failed: ${error.message}`);
+            }
+        };
+
+        // Test 10: Cleanup
         window.testDestroy = function() {
             if (!multiViewer) {
                 log('✗ MultiViewer not created yet');
@@ -873,10 +1488,29 @@
                 disableButton('layout1x2Btn');
                 disableButton('layout2x2Btn');
                 disableButton('toggleSyncBtn');
+                disableButton('lockFocusBtn');
                 disableButton('addViewerBtn');
                 disableButton('removeViewerBtn');
                 disableButton('identificationBtn');
                 disableButton('statusBtn');
+                
+                // Disable performance monitoring buttons  
+                disableButton('performanceBtn');
+                disableButton('startMonitorBtn');
+                disableButton('stopMonitorBtn');
+                disableButton('forceRenderBtn');
+                
+                // Stop performance monitoring if running
+                if (performanceMonitorInterval) {
+                    stopPerformanceMonitoring();
+                }
+                
+                // Disable cross-viewer communication buttons
+                disableButton('commSystemBtn');
+                disableButton('sharedGeomBtn');
+                disableButton('drawLineBtn');
+                disableButton('clearSharedBtn');
+                disableButton('commStatsBtn');
                 
                 // Disable configuration persistence buttons
                 disableButton('saveConfigBtn');
@@ -1114,6 +1748,44 @@
                 
             } catch (error) {
                 log(`✗ Error deleting configuration: ${error.message}`);
+            }
+        };
+        
+        // Focus Lock Toggle
+        window.toggleLockFocus = function() {
+            if (!multiViewer) {
+                log('✗ MultiViewer not created yet');
+                return;
+            }
+            
+            try {
+                log('\n=== Focus Lock Toggle ===');
+                
+                const newState = multiViewer.toggleFocusLock();
+                const mode = newState ? 'Click-to-focus (LOCKED)' : 'Hover-to-interact (UNLOCKED)';
+                const btnText = newState ? 'Lock Focus (ON)' : 'Lock Focus (OFF)';
+                
+                log(`✓ Focus lock toggled: ${newState ? 'ENABLED' : 'DISABLED'}`);
+                log(`✓ Mode: ${mode}`);
+                log('ℹ️ Behavior:');
+                if (newState) {
+                    log('  - Click inside a viewer to focus it');
+                    log('  - Only focused viewer responds to mouse/keyboard input');
+                    log('  - Other viewers are blocked from input');
+                } else {
+                    log('  - Simply hover over any viewer to interact');
+                    log('  - No need to click to focus');
+                    log('  - Viewers activate automatically on mouse movement');
+                }
+                
+                // Update button text
+                const button = document.getElementById('lockFocusBtn');
+                if (button) {
+                    button.textContent = btnText;
+                }
+                
+            } catch (error) {
+                log(`✗ Error toggling focus lock: ${error.message}`);
             }
         };
         

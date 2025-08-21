@@ -19,6 +19,9 @@ import { ViewerLayout } from "./ViewerLayout-NEW.js";
 import { ViewerRegistry } from "./ViewerRegistry-NEW.js";
 import { ViewerSync } from "./ViewerSync-NEW.js";
 import { SharedResourceManager } from "./SharedResourceManager-NEW.js";
+import { RenderOptimizer } from "./RenderOptimizer-NEW.js";
+import { CrossViewerCommunication } from "./CrossViewerCommunication-NEW.js";
+import { ViewerSidebar } from "./ViewerSidebar-NEW.js";
 
 export class ViewerManager extends EventDispatcher {
     
@@ -39,11 +42,17 @@ export class ViewerManager extends EventDispatcher {
         this.layout = new ViewerLayout(this);
         this.registry = new ViewerRegistry(this);
         this.sync = new ViewerSync(this);
+        this.renderOptimizer = new RenderOptimizer(this);
+        this.communication = new CrossViewerCommunication(this);
         
         // State management
         this.activeViewerId = null;
         this.isInitialized = false;
         this.resizeTimeout = null;
+        // CRITICAL: DO NOT CHANGE THIS DEFAULT - Lock Focus must start OFF (false)
+        // This ensures viewers work in hover-to-interact mode by default
+        // Only toggle via toggleFocusLock() method when explicitly requested
+        this.focusLockEnabled = false; // Default: hover-to-interact mode (OFF)
         
         // Future CAD systems (placeholder for now)
         this.layerManager = null;
@@ -52,6 +61,9 @@ export class ViewerManager extends EventDispatcher {
         
         // Resource management
         this.sharedResources = new SharedResourceManager();
+        
+        // Sidebar management
+        this.viewerSidebars = new Map(); // viewerId -> ViewerSidebar
         
         this.initialize();
     }
@@ -77,6 +89,9 @@ export class ViewerManager extends EventDispatcher {
         // Initialize with default layout
         this.setLayout(this.options.defaultLayout);
         
+        // Start the unified render loop
+        this.renderOptimizer.startRenderLoop();
+        
         this.isInitialized = true;
         
         this.dispatchEvent({
@@ -84,7 +99,7 @@ export class ViewerManager extends EventDispatcher {
             manager: this
         });
         
-        console.log(`ViewerManager initialized with max ${this.options.maxViewers} viewers`);
+        console.log(`ViewerManager initialized with max ${this.options.maxViewers} viewers and unified render loop`);
     }
     
     /**
@@ -279,9 +294,12 @@ export class ViewerManager extends EventDispatcher {
             viewer.loadGUI = () => Promise.resolve();
         }
         
-        // CRITICAL FIX: Start the render loop for each viewer
-        // The Potree viewer needs an active render loop to display content
-        this.startViewerRenderLoop(viewer, viewerId);
+        // RENDER OPTIMIZATION: Register viewer with unified render optimizer
+        // The RenderOptimizer will manage rendering for optimal performance
+        this.renderOptimizer.registerViewer(viewerId, viewer);
+        
+        // SIDEBAR: Create viewer-specific sidebar
+        this.createViewerSidebar(viewerId, viewer);
         
         // Initialize camera management after viewer is ready
         setTimeout(() => {
@@ -291,39 +309,66 @@ export class ViewerManager extends EventDispatcher {
     }
     
     /**
-     * Start render loop for a specific viewer
-     * @param {Viewer} viewer - The Potree viewer instance
-     * @param {string} viewerId - The viewer ID for debugging
+     * Mark viewer as having activity for optimization
+     * @param {string} viewerId - The viewer ID
      */
-    startViewerRenderLoop(viewer, viewerId) {
-        // Check if viewer has necessary methods
-        if (!viewer.loop || typeof viewer.loop !== 'function') {
-            console.warn(`Viewer '${viewerId}' does not have a loop() method`);
-            return;
+    markViewerActivity(viewerId) {
+        if (this.renderOptimizer) {
+            this.renderOptimizer.markViewerActivity(viewerId);
         }
-        
-        // Create a dedicated render loop for this viewer
-        const renderLoop = () => {
+    }
+    
+    /**
+     * Create viewer-specific sidebar
+     * @param {string} viewerId - The viewer ID
+     * @param {Viewer} viewer - The viewer instance
+     */
+    createViewerSidebar(viewerId, viewer) {
+        try {
+            const sidebar = new ViewerSidebar(viewer, viewerId, this);
+            this.viewerSidebars.set(viewerId, sidebar);
+            
+            // Setup sidebar event forwarding
+            sidebar.addEventListener('sidebar_opened', (event) => {
+                this.dispatchEvent({
+                    type: 'viewer_sidebar_opened',
+                    viewerId: viewerId,
+                    sidebar: sidebar,
+                    manager: this
+                });
+            });
+            
+            sidebar.addEventListener('sidebar_closed', (event) => {
+                this.dispatchEvent({
+                    type: 'viewer_sidebar_closed',
+                    viewerId: viewerId,
+                    sidebar: sidebar,
+                    manager: this
+                });
+            });
+            
+            console.log(`Created sidebar for viewer '${viewerId}'`);
+            
+        } catch (error) {
+            console.error(`Failed to create sidebar for viewer '${viewerId}':`, error);
+        }
+    }
+    
+    /**
+     * Cleanup viewer sidebar
+     * @param {string} viewerId - The viewer ID
+     */
+    cleanupViewerSidebar(viewerId) {
+        const sidebar = this.viewerSidebars.get(viewerId);
+        if (sidebar) {
             try {
-                if (viewer && viewer.loop && viewer.renderArea) {
-                    // Only render if viewer container is visible and has dimensions
-                    const rect = viewer.renderArea.getBoundingClientRect();
-                    if (rect.width > 0 && rect.height > 0) {
-                        viewer.loop(performance.now());
-                    }
-                }
-                // Continue the loop
-                requestAnimationFrame(renderLoop);
+                sidebar.destroy();
+                this.viewerSidebars.delete(viewerId);
+                console.log(`Cleaned up sidebar for viewer '${viewerId}'`);
             } catch (error) {
-                console.error(`Render loop error for viewer '${viewerId}':`, error);
-                // Continue despite errors to prevent complete failure
-                requestAnimationFrame(renderLoop);
+                console.error(`Error cleaning up sidebar for viewer '${viewerId}':`, error);
             }
-        };
-        
-        // Start the render loop
-        requestAnimationFrame(renderLoop);
-        console.log(`Started render loop for viewer '${viewerId}'`);
+        }
     }
     
     /**
@@ -335,6 +380,14 @@ export class ViewerManager extends EventDispatcher {
             console.warn(`Viewer '${viewerId}' not found`);
             return false;
         }
+        
+        // RENDER OPTIMIZATION: Unregister from render optimizer first
+        if (this.renderOptimizer) {
+            this.renderOptimizer.unregisterViewer(viewerId);
+        }
+        
+        // SIDEBAR: Cleanup viewer sidebar
+        this.cleanupViewerSidebar(viewerId);
         
         // Cleanup viewer
         this.cleanupViewer(viewerId, viewer);
@@ -536,6 +589,7 @@ export class ViewerManager extends EventDispatcher {
         handlers.mousedown = (event) => this.handleViewerMouseEvent(event, viewer, viewerId, 'mousedown');
         handlers.mousemove = (event) => this.handleViewerMouseEvent(event, viewer, viewerId, 'mousemove');
         handlers.mouseup = (event) => this.handleViewerMouseEvent(event, viewer, viewerId, 'mouseup');
+        handlers.mouseenter = (event) => this.handleViewerMouseEvent(event, viewer, viewerId, 'mouseenter');
         handlers.wheel = (event) => this.handleViewerWheelEvent(event, viewer, viewerId);
         handlers.contextmenu = (event) => this.handleViewerContextMenu(event, viewer, viewerId);
         
@@ -552,6 +606,7 @@ export class ViewerManager extends EventDispatcher {
         container.addEventListener('mousedown', handlers.mousedown, { capture: true, passive: false });
         container.addEventListener('mousemove', handlers.mousemove, { capture: true, passive: false });
         container.addEventListener('mouseup', handlers.mouseup, { capture: true, passive: false });
+        container.addEventListener('mouseenter', handlers.mouseenter, { capture: true, passive: false });
         container.addEventListener('wheel', handlers.wheel, { capture: true, passive: false });
         container.addEventListener('contextmenu', handlers.contextmenu, { capture: true, passive: false });
         container.addEventListener('touchstart', handlers.touchstart, { capture: true, passive: false });
@@ -602,6 +657,7 @@ export class ViewerManager extends EventDispatcher {
         if (handlers.mousedown) container.removeEventListener('mousedown', handlers.mousedown, { capture: true });
         if (handlers.mousemove) container.removeEventListener('mousemove', handlers.mousemove, { capture: true });
         if (handlers.mouseup) container.removeEventListener('mouseup', handlers.mouseup, { capture: true });
+        if (handlers.mouseenter) container.removeEventListener('mouseenter', handlers.mouseenter, { capture: true });
         if (handlers.wheel) container.removeEventListener('wheel', handlers.wheel, { capture: true });
         if (handlers.contextmenu) container.removeEventListener('contextmenu', handlers.contextmenu, { capture: true });
         if (handlers.touchstart) container.removeEventListener('touchstart', handlers.touchstart, { capture: true });
@@ -1191,18 +1247,43 @@ export class ViewerManager extends EventDispatcher {
      * Handle mouse events for active viewer
      */
     handleViewerMouseEvent(event, viewer, viewerId, eventType) {
-        // Only process if this viewer is active
-        if (!viewer.multiViewerConfig.isActive || !viewer.multiViewerConfig.receivesInput) {
-            event.preventDefault();
-            event.stopPropagation();
-            event.stopImmediatePropagation();
-            console.log(`ViewerManager: Blocked ${eventType} event on inactive viewer '${viewerId}'`);
-            return false;
+        // Check if the event is from a sidebar control - if so, let it pass through unmodified
+        if (this.isSidebarControlEvent(event)) {
+            // Don't interfere with sidebar control events
+            console.log(`ViewerManager: Allowing sidebar control event (${eventType}) on element:`, event.target);
+            return true;
+        }
+        
+        // RENDER OPTIMIZATION: Mark viewer as having activity
+        this.markViewerActivity(viewerId);
+        
+        // In focus lock mode, only process if this viewer is active
+        if (this.focusLockEnabled) {
+            if (!viewer.multiViewerConfig.isActive || !viewer.multiViewerConfig.receivesInput) {
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+                console.log(`ViewerManager: [LOCKED] Blocked ${eventType} event on inactive viewer '${viewerId}'`);
+                return false;
+            }
+        }
+        // In hover mode, activate the viewer on mouse events
+        else {
+            // Auto-activate viewer on mouse interaction (hover mode)
+            // Include mouseenter, mousemove, mousedown, mouseup for comprehensive hover detection
+            if (eventType === 'mousedown' || eventType === 'mousemove' || eventType === 'mouseup' || 
+                eventType === 'mouseenter' || eventType === 'wheel') {
+                if (this.activeViewerId !== viewerId) {
+                    this.setActiveViewer(viewerId);
+                    console.log(`ViewerManager: [HOVER] Auto-activated viewer '${viewerId}' on ${eventType}`);
+                }
+            }
         }
         
         // Log active viewer events for debugging
         if (eventType === 'mousedown') {
-            console.log(`ViewerManager: Processing ${eventType} event on active viewer '${viewerId}'`);
+            const mode = this.focusLockEnabled ? 'LOCKED' : 'HOVER';
+            console.log(`ViewerManager: [${mode}] Processing ${eventType} event on viewer '${viewerId}'`);
         }
         
         // Let the viewer handle the event normally
@@ -1210,19 +1291,81 @@ export class ViewerManager extends EventDispatcher {
     }
     
     /**
+     * Check if a mouse event is from a sidebar control element
+     */
+    isSidebarControlEvent(event) {
+        if (!event || !event.target) return false;
+        
+        const target = event.target;
+        
+        // Check if the target is a sidebar control element
+        // Look for specific sidebar control elements
+        const sidebarSelectors = [
+            'input[type="range"]',  // sliders
+            'input[type="checkbox"]', // checkboxes
+            'input[type="radio"]',   // radio buttons
+            'select',               // dropdowns
+            'button'                // buttons
+        ];
+        
+        // Check if the target matches any sidebar control selector
+        for (const selector of sidebarSelectors) {
+            if (target.matches && target.matches(selector)) {
+                // Also check if it's within a sidebar container
+                const sidebarParent = target.closest('[data-viewer-sidebar]');
+                if (sidebarParent) {
+                    return true;
+                }
+            }
+        }
+        
+        // Check if the target is within a sidebar container
+        if (target.closest && target.closest('[data-viewer-sidebar]')) {
+            return true;
+        }
+        
+        // Check by ID patterns (for our specific sidebar controls)
+        if (target.id && (
+            target.id.includes('sldPointBudget-') ||
+            target.id.includes('sldFOV-') ||
+            target.id.includes('chkEDLEnabled-') ||
+            target.id.includes('background_options-') ||
+            target.id.includes('lblPointBudget-') ||
+            target.id.includes('lblFOV-')
+        )) {
+            return true;
+        }
+        
+        return false;
+    }
+    
+    /**
      * Handle wheel events for active viewer
      */
     handleViewerWheelEvent(event, viewer, viewerId) {
-        // Only process if this viewer is active
-        if (!viewer.multiViewerConfig.isActive || !viewer.multiViewerConfig.receivesInput) {
-            event.preventDefault();
-            event.stopPropagation();
-            event.stopImmediatePropagation();
-            console.log(`ViewerManager: Blocked wheel event on inactive viewer '${viewerId}'`);
-            return false;
+        // RENDER OPTIMIZATION: Mark viewer as having activity
+        this.markViewerActivity(viewerId);
+        
+        // In focus lock mode, only process if this viewer is active
+        if (this.focusLockEnabled) {
+            if (!viewer.multiViewerConfig.isActive || !viewer.multiViewerConfig.receivesInput) {
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+                console.log(`ViewerManager: [LOCKED] Blocked wheel event on inactive viewer '${viewerId}'`);
+                return false;
+            }
+        }
+        // In hover mode, activate the viewer on wheel events
+        else {
+            if (this.activeViewerId !== viewerId) {
+                this.setActiveViewer(viewerId);
+                console.log(`ViewerManager: [HOVER] Auto-activated viewer '${viewerId}' on wheel`);
+            }
         }
         
-        console.log(`ViewerManager: Processing wheel event on active viewer '${viewerId}'`);
+        const mode = this.focusLockEnabled ? 'LOCKED' : 'HOVER';
+        console.log(`ViewerManager: [${mode}] Processing wheel event on viewer '${viewerId}'`);
         // Let the viewer handle the event normally
         return true;
     }
@@ -1246,6 +1389,9 @@ export class ViewerManager extends EventDispatcher {
      * Handle keyboard events for active viewer
      */
     handleViewerKeyEvent(event, viewer, viewerId, eventType) {
+        // RENDER OPTIMIZATION: Mark viewer as having activity
+        this.markViewerActivity(viewerId);
+        
         // Only process if this viewer is active
         if (!viewer.multiViewerConfig.isActive || !viewer.multiViewerConfig.receivesInput) {
             event.preventDefault();
@@ -1565,6 +1711,170 @@ export class ViewerManager extends EventDispatcher {
     }
     
     /**
+     * Get rendering performance statistics
+     * @returns {Object} Performance statistics from render optimizer
+     */
+    getRenderingStats() {
+        if (!this.renderOptimizer) {
+            return null;
+        }
+        return this.renderOptimizer.getPerformanceStats();
+    }
+    
+    /**
+     * Get detailed viewer performance metrics
+     * @returns {Array} Viewer performance metrics
+     */
+    getViewerPerformanceMetrics() {
+        if (!this.renderOptimizer) {
+            return [];
+        }
+        return this.renderOptimizer.getViewerStats();
+    }
+    
+    /**
+     * Configure rendering optimization
+     * @param {Object} config - Optimization configuration
+     */
+    configureRenderOptimization(config) {
+        if (this.renderOptimizer) {
+            this.renderOptimizer.configure(config);
+        }
+    }
+    
+    /**
+     * Enable or disable adaptive rendering
+     * @param {boolean} enabled - Whether to enable adaptive rendering
+     */
+    setAdaptiveRendering(enabled) {
+        if (this.renderOptimizer) {
+            this.renderOptimizer.setAdaptiveRendering(enabled);
+        }
+    }
+    
+    /**
+     * Force render all viewers (bypass optimization)
+     */
+    forceRenderAll() {
+        if (this.renderOptimizer) {
+            this.renderOptimizer.forceRenderAll();
+        }
+    }
+    
+    /**
+     * Get render optimizer instance
+     * @returns {RenderOptimizer} The render optimizer instance
+     */
+    getRenderOptimizer() {
+        return this.renderOptimizer;
+    }
+    
+    /**
+     * Get cross-viewer communication system
+     * @returns {CrossViewerCommunication} The communication system instance
+     */
+    getCommunication() {
+        return this.communication;
+    }
+    
+    /**
+     * Send message to viewers on a specific channel
+     * @param {string} channel - Communication channel name
+     * @param {Object} message - Message data
+     * @param {string} fromViewerId - Optional sender viewer ID
+     * @returns {boolean} Success status
+     */
+    sendMessage(channel, message, fromViewerId = null) {
+        if (this.communication) {
+            return this.communication.sendMessage(channel, message, fromViewerId);
+        }
+        return false;
+    }
+    
+    /**
+     * Subscribe viewer to communication channel
+     * @param {string} viewerId - Viewer ID
+     * @param {string} channel - Channel name
+     */
+    subscribeViewerToChannel(viewerId, channel) {
+        if (this.communication) {
+            this.communication.subscribeViewerToChannel(viewerId, channel);
+        }
+    }
+    
+    /**
+     * Add shared geometry across all viewers
+     * @param {Object} geometryData - Geometry data {type, coordinates, style}
+     * @param {string} fromViewerId - Optional source viewer ID
+     * @returns {string} Geometry ID
+     */
+    addSharedGeometry(geometryData, fromViewerId = null) {
+        if (this.communication) {
+            return this.communication.addSharedGeometry(geometryData, fromViewerId);
+        }
+        return null;
+    }
+    
+    /**
+     * Update shared geometry
+     * @param {string} geometryId - Geometry ID to update
+     * @param {Object} updates - Updates to apply
+     * @param {string} fromViewerId - Optional source viewer ID
+     * @returns {boolean} Success status
+     */
+    updateSharedGeometry(geometryId, updates, fromViewerId = null) {
+        if (this.communication) {
+            return this.communication.updateSharedGeometry(geometryId, updates, fromViewerId);
+        }
+        return false;
+    }
+    
+    /**
+     * Remove shared geometry
+     * @param {string} geometryId - Geometry ID to remove
+     * @param {string} fromViewerId - Optional source viewer ID
+     * @returns {boolean} Success status
+     */
+    removeSharedGeometry(geometryId, fromViewerId = null) {
+        if (this.communication) {
+            return this.communication.removeSharedGeometry(geometryId, fromViewerId);
+        }
+        return false;
+    }
+    
+    /**
+     * Get shared state across all viewers
+     * @returns {Object} Shared state object
+     */
+    getSharedState() {
+        if (this.communication) {
+            return this.communication.getSharedState();
+        }
+        return null;
+    }
+    
+    /**
+     * Get communication statistics
+     * @returns {Object} Communication stats
+     */
+    getCommunicationStats() {
+        if (this.communication) {
+            return this.communication.getStats();
+        }
+        return null;
+    }
+    
+    /**
+     * Enable/disable cross-viewer communication
+     * @param {boolean} enabled - Whether to enable communication
+     */
+    setCommunicationEnabled(enabled) {
+        if (this.communication) {
+            this.communication.setEnabled(enabled);
+        }
+    }
+    
+    /**
      * Destroy the manager and cleanup all resources
      */
     destroy() {
@@ -1587,6 +1897,18 @@ export class ViewerManager extends EventDispatcher {
         this.layout.destroy();
         this.registry.destroy();
         this.sync.destroy();
+        
+        // RENDER OPTIMIZATION: Destroy render optimizer
+        if (this.renderOptimizer) {
+            this.renderOptimizer.destroy();
+            this.renderOptimizer = null;
+        }
+        
+        // COMMUNICATION: Destroy cross-viewer communication
+        if (this.communication) {
+            this.communication.destroy();
+            this.communication = null;
+        }
         
         this.isInitialized = false;
         
@@ -1633,6 +1955,57 @@ export class ViewerManager extends EventDispatcher {
     }
     
     /**
+     * Toggle focus lock mode
+     * @returns {boolean} New focus lock state
+     */
+    toggleFocusLock() {
+        this.focusLockEnabled = !this.focusLockEnabled;
+        
+        console.log(`ViewerManager: Focus lock ${this.focusLockEnabled ? 'ENABLED' : 'DISABLED'}`);
+        console.log(`ViewerManager: Mode: ${this.focusLockEnabled ? 'Click-to-focus' : 'Hover-to-interact'}`);
+        
+        this.dispatchEvent({
+            type: 'focus_lock_changed',
+            enabled: this.focusLockEnabled,
+            mode: this.focusLockEnabled ? 'click-to-focus' : 'hover-to-interact'
+        });
+        
+        return this.focusLockEnabled;
+    }
+    
+    /**
+     * Set focus lock mode
+     * @param {boolean} enabled - Whether to enable focus lock
+     * @returns {boolean} New focus lock state
+     */
+    setFocusLock(enabled) {
+        if (this.focusLockEnabled === enabled) {
+            return this.focusLockEnabled;
+        }
+        
+        this.focusLockEnabled = enabled;
+        
+        console.log(`ViewerManager: Focus lock ${enabled ? 'ENABLED' : 'DISABLED'}`);
+        console.log(`ViewerManager: Mode: ${enabled ? 'Click-to-focus' : 'Hover-to-interact'}`);
+        
+        this.dispatchEvent({
+            type: 'focus_lock_changed',
+            enabled: enabled,
+            mode: enabled ? 'click-to-focus' : 'hover-to-interact'
+        });
+        
+        return this.focusLockEnabled;
+    }
+    
+    /**
+     * Get current focus lock state
+     * @returns {boolean} Whether focus lock is enabled
+     */
+    isFocusLocked() {
+        return this.focusLockEnabled;
+    }
+
+    /**
      * Get manager status and statistics
      */
     getStatus() {
@@ -1642,7 +2015,8 @@ export class ViewerManager extends EventDispatcher {
             maxViewers: this.options.maxViewers,
             activeViewerId: this.activeViewerId,
             currentLayout: this.layout.getCurrentLayout(),
-            syncEnabled: this.sync.isEnabled()
+            syncEnabled: this.sync.isEnabled(),
+            focusLockEnabled: this.focusLockEnabled
         };
     }
 }

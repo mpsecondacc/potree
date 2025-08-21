@@ -1,0 +1,1663 @@
+/**
+ * ViewerSidebar-NEW.js
+ * 
+ * CUSTOM IMPLEMENTATION - Created for viewer-specific sidebar integration
+ * 
+ * Modular sidebar system for individual viewers with:
+ * - Tailwind CSS styling
+ * - Headless UI components
+ * - Hamburger menu with collapsible sections
+ * - Quick action icons (Top View, Lock View, Zoom Extents)
+ * - Viewport-aware positioning to prevent spillover
+ * - Memory-efficient modular components
+ * 
+ * Each viewer gets its own independent sidebar instance.
+ */
+
+import { EventDispatcher } from "../EventDispatcher.js";
+
+export class ViewerSidebar extends EventDispatcher {
+    
+    constructor(viewer, viewerId, viewerManager) {
+        super();
+        
+        this.viewer = viewer;
+        this.viewerId = viewerId;
+        this.viewerManager = viewerManager;
+        
+        // State management
+        this.isOpen = false;
+        this.isInitialized = false;
+        
+        // UI configuration
+        this.config = {
+            position: 'left', // left, right
+            width: '280px',
+            maxHeight: '80vh',
+            zIndex: 1000,
+            animations: true,
+            theme: 'dark' // dark, light
+        };
+        
+        // Sidebar sections
+        this.sections = new Map();
+        this.activeSections = new Set(['appearance', 'tools', 'scene']);
+        
+        // DOM references
+        this.containerElement = null;
+        this.sidebarElement = null;
+        this.hamburgerButton = null;
+        this.quickActionButtons = null;
+        this.contentContainer = null;
+        
+        // Quick actions state
+        this.quickActions = {
+            topView: false,
+            lockView: false,
+            lastViewState: null
+        };
+        
+        this.initialize();
+    }
+    
+    /**
+     * Initialize the sidebar system
+     */
+    initialize() {
+        if (this.isInitialized || !this.viewer.renderArea) {
+            return;
+        }
+        
+        // Create sidebar container
+        this.createSidebarContainer();
+        
+        // Create hamburger menu and quick actions
+        this.createMenuButtons();
+        
+        // Create sidebar content
+        this.createSidebarContent();
+        
+        // Initialize sidebar sections
+        this.initializeSections();
+        
+        // Setup event handlers
+        this.setupEventHandlers();
+        
+        // Inject Tailwind CSS if not present
+        this.ensureTailwindCSS();
+        
+        this.isInitialized = true;
+        
+        console.log(`ViewerSidebar initialized for viewer '${this.viewerId}'`);
+        
+        this.dispatchEvent({
+            type: 'sidebar_initialized',
+            viewerId: this.viewerId,
+            sidebar: this
+        });
+    }
+    
+    /**
+     * Create the main sidebar container
+     */
+    createSidebarContainer() {
+        const viewerContainer = this.viewer.renderArea;
+        if (!viewerContainer) {
+            throw new Error(`No render area found for viewer '${this.viewerId}'`);
+        }
+        
+        // Ensure viewer container has relative positioning and proper overflow handling
+        const containerStyle = window.getComputedStyle(viewerContainer);
+        if (containerStyle.position === 'static') {
+            viewerContainer.style.position = 'relative';
+        }
+        
+        // Ensure overflow is visible for sidebars but clipped properly to viewport boundaries
+        if (containerStyle.overflow === 'hidden') {
+            viewerContainer.style.overflow = 'visible';
+        }
+        
+        // Add viewport constraint class to prevent spillover
+        viewerContainer.classList.add('potree-viewport-container');
+        
+        this.containerElement = viewerContainer;
+    }
+    
+    /**
+     * Create hamburger menu button and quick action icons
+     */
+    createMenuButtons() {
+        // Create buttons container with animation support
+        const buttonsContainer = document.createElement('div');
+        buttonsContainer.className = `
+            absolute top-4 left-4 z-50 flex items-center gap-2 
+            transition-transform duration-300 ease-in-out
+        `;
+        buttonsContainer.dataset.viewerSidebar = this.viewerId;
+        buttonsContainer.id = `sidebar-buttons-${this.viewerId}`;
+        
+        // Hamburger menu button
+        this.hamburgerButton = document.createElement('button');
+        this.hamburgerButton.className = `
+            bg-gray-800 hover:bg-gray-700 text-white p-2 rounded-lg
+            shadow-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500
+        `;
+        this.hamburgerButton.innerHTML = `
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+        `;
+        this.hamburgerButton.title = 'Open Sidebar';
+        
+        // Quick action buttons container
+        const quickActionsContainer = document.createElement('div');
+        quickActionsContainer.className = 'flex items-center gap-1';
+        
+        // Top View button
+        const topViewButton = document.createElement('button');
+        topViewButton.className = `
+            bg-gray-600 hover:bg-gray-500 text-white p-1.5 rounded
+            opacity-70 hover:opacity-100 transition-all duration-200
+            focus:outline-none focus:ring-1 focus:ring-blue-400
+        `;
+        topViewButton.innerHTML = `
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+        `;
+        topViewButton.title = 'Top View';
+        
+        // Lock View button
+        const lockViewButton = document.createElement('button');
+        lockViewButton.className = `
+            bg-gray-600 hover:bg-gray-500 text-white p-1.5 rounded
+            opacity-70 hover:opacity-100 transition-all duration-200
+            focus:outline-none focus:ring-1 focus:ring-blue-400
+        `;
+        lockViewButton.innerHTML = `
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+            </svg>
+        `;
+        lockViewButton.title = 'Lock View';
+        
+        // Zoom Extents button
+        const zoomExtentsButton = document.createElement('button');
+        zoomExtentsButton.className = `
+            bg-gray-600 hover:bg-gray-500 text-white p-1.5 rounded
+            opacity-70 hover:opacity-100 transition-all duration-200
+            focus:outline-none focus:ring-1 focus:ring-blue-400
+        `;
+        zoomExtentsButton.innerHTML = `
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"/>
+            </svg>
+        `;
+        zoomExtentsButton.title = 'Zoom to Extents';
+        
+        // Store references
+        this.quickActionButtons = {
+            topView: topViewButton,
+            lockView: lockViewButton,
+            zoomExtents: zoomExtentsButton
+        };
+        
+        // Assemble buttons
+        quickActionsContainer.appendChild(topViewButton);
+        quickActionsContainer.appendChild(lockViewButton);
+        quickActionsContainer.appendChild(zoomExtentsButton);
+        
+        buttonsContainer.appendChild(this.hamburgerButton);
+        buttonsContainer.appendChild(quickActionsContainer);
+        
+        // Store reference for animation
+        this.buttonsContainer = buttonsContainer;
+        
+        this.containerElement.appendChild(buttonsContainer);
+    }
+    
+    /**
+     * Create the main sidebar content
+     */
+    createSidebarContent() {
+        this.sidebarElement = document.createElement('div');
+        this.sidebarElement.className = `
+            absolute top-0 left-0 h-full bg-gray-900 text-white sidebar-element
+            transform -translate-x-full transition-transform duration-300 ease-in-out
+            shadow-2xl overflow-hidden z-40
+        `;
+        this.sidebarElement.style.width = this.config.width;
+        this.sidebarElement.dataset.viewerSidebar = this.viewerId;
+        
+        // Sidebar header (simplified without redundant close button)
+        const header = document.createElement('div');
+        header.className = `
+            bg-gray-800 px-4 py-3 border-b border-gray-700
+            flex items-center
+        `;
+        
+        const title = document.createElement('h2');
+        title.className = 'text-lg font-semibold text-white';
+        title.textContent = `Viewer: ${this.viewerId}`;
+        
+        header.appendChild(title);
+        
+        // Sidebar content container
+        this.contentContainer = document.createElement('div');
+        this.contentContainer.className = `
+            flex-1 overflow-y-auto overflow-x-hidden
+            scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800
+        `;
+        this.contentContainer.style.maxHeight = this.config.maxHeight;
+        
+        // Assemble sidebar
+        this.sidebarElement.appendChild(header);
+        this.sidebarElement.appendChild(this.contentContainer);
+        
+        this.containerElement.appendChild(this.sidebarElement);
+    }
+    
+    /**
+     * Initialize sidebar sections
+     */
+    initializeSections() {
+        // Create section definitions
+        const sectionConfigs = [
+            { id: 'appearance', title: 'Appearance', icon: 'eye', order: 1 },
+            { id: 'measurement', title: 'Measurement', icon: 'ruler', order: 2 },
+            { id: 'clipping', title: 'Clipping', icon: 'scissors', order: 3 },
+            { id: 'navigation', title: 'Navigation', icon: 'cursor-click', order: 4 },
+            { id: 'scene', title: 'Scene', icon: 'cube', order: 5 },
+            { id: 'filters', title: 'Filters', icon: 'filter', order: 6 },
+            { id: 'about', title: 'About', icon: 'information-circle', order: 7 }
+        ];
+        
+        sectionConfigs.forEach(config => {
+            const section = this.createSection(config);
+            this.sections.set(config.id, section);
+            
+            // Add section to the sidebar content container
+            this.contentContainer.appendChild(section.element);
+        });
+        
+        console.log(`Created ${this.sections.size} sidebar sections for viewer '${this.viewerId}'`);
+    }
+    
+    /**
+     * Create a collapsible section
+     */
+    createSection(config) {
+        const section = document.createElement('div');
+        section.className = 'border-b border-gray-700 last:border-b-0';
+        section.dataset.sectionId = config.id;
+        
+        // Section header
+        const header = document.createElement('button');
+        header.className = `
+            w-full px-4 py-3 text-left flex items-center justify-between
+            hover:bg-gray-800 transition-colors duration-200
+            focus:outline-none focus:bg-gray-800
+        `;
+        
+        const headerContent = document.createElement('div');
+        headerContent.className = 'flex items-center gap-3';
+        
+        const icon = document.createElement('div');
+        icon.innerHTML = this.getSectionIcon(config.icon);
+        icon.className = 'text-gray-400';
+        
+        const title = document.createElement('span');
+        title.className = 'font-medium text-white';
+        title.textContent = config.title;
+        
+        const chevron = document.createElement('div');
+        chevron.className = 'text-gray-400 transform transition-transform duration-200';
+        chevron.innerHTML = `
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+        `;
+        
+        headerContent.appendChild(icon);
+        headerContent.appendChild(title);
+        header.appendChild(headerContent);
+        header.appendChild(chevron);
+        
+        // Section content
+        const content = document.createElement('div');
+        content.className = `
+            max-h-0 overflow-hidden transition-all duration-300 ease-in-out
+            bg-gray-850
+        `;
+        
+        const contentInner = document.createElement('div');
+        contentInner.className = 'p-4 space-y-3';
+        
+        // Populate section content based on type
+        this.populateSectionContent(contentInner, config.id);
+        
+        content.appendChild(contentInner);
+        
+        section.appendChild(header);
+        section.appendChild(content);
+        
+        // Store references
+        const sectionObj = {
+            id: config.id,
+            element: section,
+            header: header,
+            content: content,
+            chevron: chevron,
+            isOpen: this.activeSections.has(config.id),
+            order: config.order
+        };
+        
+        // Set initial state
+        if (sectionObj.isOpen) {
+            this.expandSection(sectionObj);
+        }
+        
+        return sectionObj;
+    }
+    
+    /**
+     * Get SVG icon for section
+     */
+    getSectionIcon(iconName) {
+        const icons = {
+            eye: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+            </svg>`,
+            photograph: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>`,
+            ruler: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/>
+            </svg>`,
+            scissors: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1M9 16v-6a2 2 0 012-2h2a2 2 0 012 2v6M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>`,
+            'cursor-click': `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"/>
+            </svg>`,
+            cube: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+            </svg>`,
+            filter: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.207A1 1 0 013 6.5V4z"/>
+            </svg>`,
+            'information-circle': `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>`
+        };
+        
+        return icons[iconName] || icons['information-circle'];
+    }
+    
+    /**
+     * Populate section content based on section type
+     */
+    populateSectionContent(container, sectionId) {
+        switch (sectionId) {
+            case 'appearance':
+                this.createAppearanceSection(container);
+                break;
+            case 'measurement':
+                this.createMeasurementSection(container);
+                break;
+            case 'clipping':
+                this.createClippingSection(container);
+                break;
+            case 'navigation':
+                this.createNavigationSection(container);
+                break;
+            case 'scene':
+                this.createSceneSection(container);
+                break;
+            case 'filters':
+                this.createFiltersSection(container);
+                break;
+            case 'about':
+                this.createAboutSection(container);
+                break;
+            default:
+                container.innerHTML = `<p class="text-gray-400">Section content for ${sectionId}</p>`;
+        }
+    }
+    
+    /**
+     * Create Appearance section content
+     */
+    createAppearanceSection(container) {
+        container.innerHTML = `
+            <ul class="pv-menu-list space-y-2 text-sm">
+                <li class="flex items-center justify-between">
+                    <span class="text-gray-300">Point Budget:</span>
+                    <span id="lblPointBudget-${this.viewerId}" class="text-gray-400">1,000,000</span>
+                </li>
+                <li>
+                    <input type="range" id="sldPointBudget-${this.viewerId}" 
+                           min="100000" max="10000000" value="1000000" step="1000"
+                           class="w-full h-2 bg-gray-700 rounded-lg appearance-none slider-thumb">
+                </li>
+                
+                <li class="flex items-center justify-between pt-2">
+                    <span class="text-gray-300">Field of View:</span>
+                    <span id="lblFOV-${this.viewerId}" class="text-gray-400">60°</span>
+                </li>
+                <li>
+                    <input type="range" id="sldFOV-${this.viewerId}"
+                           min="20" max="100" value="60" step="1"
+                           class="w-full h-2 bg-gray-700 rounded-lg appearance-none slider-thumb">
+                </li>
+
+                <div class="border-t border-gray-700 my-3"></div>
+                <li class="text-gray-300 font-medium">Eye-Dome-Lighting</li>
+                
+                <li>
+                    <label class="flex items-center space-x-2">
+                        <input type="checkbox" id="chkEDLEnabled-${this.viewerId}" class="w-4 h-4 text-blue-600 rounded">
+                        <span class="text-sm text-gray-300">Enable EDL</span>
+                    </label>
+                </li>
+
+            </ul>
+        `;
+        
+        // Connect controls to viewer functionality (like original sidebar.js)
+        this.connectAppearanceControls();
+    }
+    
+    /**
+     * Connect appearance controls to viewer functionality (based on original sidebar.js)
+     */
+    connectAppearanceControls() {
+        if (!this.viewer) {
+            console.warn(`No viewer available for sidebar ${this.viewerId}`);
+            return;
+        }
+        
+        const viewerId = this.viewerId;
+        
+        // Debug: Check if viewer methods exist
+        console.log('Viewer object for', this.viewerId, ':', this.viewer);
+        console.log('Viewer constructor:', this.viewer.constructor.name);
+        console.log('Viewer methods available for', this.viewerId, ':', {
+            getPointBudget: typeof this.viewer.getPointBudget,
+            setPointBudget: typeof this.viewer.setPointBudget,
+            getFOV: typeof this.viewer.getFOV,
+            setFOV: typeof this.viewer.setFOV,
+            getEDLEnabled: typeof this.viewer.getEDLEnabled,
+            setEDLEnabled: typeof this.viewer.setEDLEnabled,
+        });
+        
+        // Check current values
+        if (this.viewer.getPointBudget) {
+            console.log('Current point budget:', this.viewer.getPointBudget());
+        }
+        if (this.viewer.getFOV) {
+            console.log('Current FOV:', this.viewer.getFOV());
+        }
+        
+        // Point Budget Slider
+        const sldPointBudget = document.getElementById(`sldPointBudget-${viewerId}`);
+        const lblPointBudget = document.getElementById(`lblPointBudget-${viewerId}`);
+        
+        if (sldPointBudget && lblPointBudget) {
+            // Set initial value
+            const currentPointBudget = this.viewer.getPointBudget ? this.viewer.getPointBudget() : 1000000;
+            sldPointBudget.value = currentPointBudget;
+            lblPointBudget.textContent = this.addCommas(currentPointBudget);
+            
+            // Handle slider changes
+            sldPointBudget.addEventListener('input', (e) => {
+                const value = parseInt(e.target.value);
+                console.log(`Point Budget slider changed to: ${value} for viewer ${viewerId}`);
+                
+                if (this.viewer.setPointBudget) {
+                    console.log('Calling viewer.setPointBudget with:', value);
+                    
+                    // Get current value before change
+                    const beforeValue = this.viewer.getPointBudget ? this.viewer.getPointBudget() : 'unknown';
+                    console.log('Point budget before change:', beforeValue);
+                    
+                    this.viewer.setPointBudget(value);
+                    
+                    // Get value after change to verify it worked
+                    const afterValue = this.viewer.getPointBudget ? this.viewer.getPointBudget() : 'unknown';
+                    console.log('Point budget after change:', afterValue);
+                    
+                    // Check if we have point clouds that should be affected
+                    if (this.viewer.scene && this.viewer.scene.pointclouds) {
+                        console.log('Point clouds that should be affected:', this.viewer.scene.pointclouds.length);
+                    }
+                } else {
+                    console.error('viewer.setPointBudget not available');
+                }
+                lblPointBudget.textContent = this.addCommas(value);
+            });
+        }
+        
+        // Field of View Slider
+        const sldFOV = document.getElementById(`sldFOV-${viewerId}`);
+        const lblFOV = document.getElementById(`lblFOV-${viewerId}`);
+        
+        if (sldFOV && lblFOV) {
+            // Set initial value
+            const currentFOV = this.viewer.getFOV ? this.viewer.getFOV() : 60;
+            sldFOV.value = currentFOV;
+            lblFOV.textContent = Math.round(currentFOV) + '°';
+            
+            // Handle slider changes
+            sldFOV.addEventListener('input', (e) => {
+                const value = parseInt(e.target.value);
+                console.log(`FOV slider changed to: ${value} for viewer ${viewerId}`);
+                
+                if (this.viewer.setFOV) {
+                    console.log('Calling viewer.setFOV with:', value);
+                    
+                    const beforeValue = this.viewer.getFOV ? this.viewer.getFOV() : 'unknown';
+                    console.log('FOV before change:', beforeValue);
+                    
+                    this.viewer.setFOV(value);
+                    
+                    const afterValue = this.viewer.getFOV ? this.viewer.getFOV() : 'unknown';
+                    console.log('FOV after change:', afterValue);
+                    
+                    // Check camera FOV
+                    if (this.viewer.scene && this.viewer.scene.getActiveCamera) {
+                        const camera = this.viewer.scene.getActiveCamera();
+                        if (camera && camera.fov !== undefined) {
+                            console.log('Camera FOV after change:', camera.fov);
+                        }
+                    }
+                } else {
+                    console.error('viewer.setFOV not available');
+                }
+                lblFOV.textContent = value + '°';
+            });
+        }
+        
+        // EDL Checkbox
+        const chkEDLEnabled = document.getElementById(`chkEDLEnabled-${viewerId}`);
+        
+        if (chkEDLEnabled) {
+            // Set initial value
+            const currentEDL = this.viewer.getEDLEnabled ? this.viewer.getEDLEnabled() : false;
+            chkEDLEnabled.checked = currentEDL;
+            
+            // Handle checkbox changes
+            chkEDLEnabled.addEventListener('change', (e) => {
+                console.log(`EDL checkbox changed to: ${e.target.checked} for viewer ${viewerId}`);
+                
+                if (this.viewer.setEDLEnabled) {
+                    console.log('Calling viewer.setEDLEnabled with:', e.target.checked);
+                    this.viewer.setEDLEnabled(e.target.checked);
+                } else {
+                    console.error('viewer.setEDLEnabled not available');
+                }
+            });
+        }
+        
+        // Set up event listeners to update UI when viewer changes (like original)
+        this.setupViewerEventListeners();
+    }
+    
+    /**
+     * Setup event listeners to update UI when viewer properties change
+     */
+    setupViewerEventListeners() {
+        if (!this.viewer || !this.viewer.addEventListener) {
+            return;
+        }
+        
+        const viewerId = this.viewerId;
+        
+        // Listen for point budget changes
+        this.viewer.addEventListener('point_budget_changed', (event) => {
+            const lblPointBudget = document.getElementById(`lblPointBudget-${viewerId}`);
+            const sldPointBudget = document.getElementById(`sldPointBudget-${viewerId}`);
+            
+            if (lblPointBudget) {
+                lblPointBudget.textContent = this.addCommas(this.viewer.getPointBudget());
+            }
+            if (sldPointBudget) {
+                sldPointBudget.value = this.viewer.getPointBudget();
+            }
+        });
+        
+        // Listen for FOV changes
+        this.viewer.addEventListener('fov_changed', (event) => {
+            const lblFOV = document.getElementById(`lblFOV-${viewerId}`);
+            const sldFOV = document.getElementById(`sldFOV-${viewerId}`);
+            
+            if (lblFOV) {
+                lblFOV.textContent = Math.round(this.viewer.getFOV()) + '°';
+            }
+            if (sldFOV) {
+                sldFOV.value = this.viewer.getFOV();
+            }
+        });
+        
+        // Listen for EDL changes
+        this.viewer.addEventListener('use_edl_changed', (event) => {
+            const chkEDLEnabled = document.getElementById(`chkEDLEnabled-${viewerId}`);
+            if (chkEDLEnabled) {
+                chkEDLEnabled.checked = this.viewer.getEDLEnabled();
+            }
+        });
+    }
+    
+    /**
+     * Utility function to add commas to numbers (from Utils.js)
+     */
+    addCommas(num) {
+        return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+    
+    /**
+     * Create Measurement section content
+     */
+    createMeasurementSection(container) {
+        container.innerHTML = `
+            <div class="space-y-3">
+                <button id="distanceTool-${this.viewerId}" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors">
+                    Distance Tool
+                </button>
+                <button id="areaTool-${this.viewerId}" class="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg transition-colors">
+                    Area Tool
+                </button>
+                <button id="volumeTool-${this.viewerId}" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg transition-colors">
+                    Volume Tool
+                </button>
+                <button id="clearMeasurements-${this.viewerId}" class="w-full bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg transition-colors">
+                    Clear All
+                </button>
+            </div>
+        `;
+        
+        // Connect measurement tools to viewer functionality
+        this.connectMeasurementControls();
+    }
+    
+    /**
+     * Connect measurement buttons to viewer measurement tools
+     */
+    connectMeasurementControls() {
+        const viewerId = this.viewerId;
+        
+        // Distance tool
+        const distanceBtn = document.getElementById(`distanceTool-${viewerId}`);
+        if (distanceBtn) {
+            distanceBtn.addEventListener('click', () => {
+                if (this.viewer && this.viewer.measuringTool && this.viewer.measuringTool.startInsertion) {
+                    console.log('Starting distance measurement for viewer:', viewerId);
+                    try {
+                        const measurement = this.viewer.measuringTool.startInsertion({
+                            showDistances: true,
+                            showArea: false,
+                            closed: false,
+                            name: 'Distance'
+                        });
+                        console.log('Distance measurement created:', measurement);
+                    } catch (error) {
+                        console.error('Error creating distance measurement:', error);
+                    }
+                }
+            });
+        }
+        
+        // Area tool
+        const areaBtn = document.getElementById(`areaTool-${viewerId}`);
+        if (areaBtn) {
+            areaBtn.addEventListener('click', () => {
+                if (this.viewer && this.viewer.measuringTool && this.viewer.measuringTool.startInsertion) {
+                    console.log('Starting area measurement for viewer:', viewerId);
+                    try {
+                        const measurement = this.viewer.measuringTool.startInsertion({
+                            showDistances: true,
+                            showArea: true,
+                            closed: true,
+                            name: 'Area'
+                        });
+                        console.log('Area measurement created:', measurement);
+                    } catch (error) {
+                        console.error('Error creating area measurement:', error);
+                    }
+                }
+            });
+        }
+        
+        // Volume tool
+        const volumeBtn = document.getElementById(`volumeTool-${viewerId}`);
+        if (volumeBtn) {
+            volumeBtn.addEventListener('click', () => {
+                if (this.viewer && this.viewer.volumeTool && this.viewer.volumeTool.startInsertion) {
+                    console.log('Starting volume measurement for viewer:', viewerId);
+                    try {
+                        const volume = this.viewer.volumeTool.startInsertion();
+                        console.log('Volume measurement created:', volume);
+                    } catch (error) {
+                        console.error('Error creating volume measurement:', error);
+                    }
+                }
+            });
+        }
+        
+        // Clear all measurements
+        const clearBtn = document.getElementById(`clearMeasurements-${viewerId}`);
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                if (this.viewer && this.viewer.scene && this.viewer.scene.removeAllMeasurements) {
+                    console.log('Clearing all measurements for viewer:', viewerId);
+                    try {
+                        this.viewer.scene.removeAllMeasurements();
+                        console.log('All measurements cleared');
+                    } catch (error) {
+                        console.error('Error clearing measurements:', error);
+                    }
+                }
+            });
+        }
+    }
+    
+    /**
+     * Create Clipping section content
+     */
+    createClippingSection(container) {
+        container.innerHTML = `
+            <div class="space-y-3">
+                <button class="w-full bg-orange-600 hover:bg-orange-700 text-white py-2 px-4 rounded-lg transition-colors">
+                    Box Clipping
+                </button>
+                <button class="w-full bg-yellow-600 hover:bg-yellow-700 text-white py-2 px-4 rounded-lg transition-colors">
+                    Plane Clipping
+                </button>
+                <div class="border-t border-gray-700 pt-3">
+                    <label class="flex items-center space-x-3">
+                        <input type="checkbox" class="form-checkbox h-4 w-4 text-blue-600 rounded">
+                        <span class="text-sm text-gray-300">Show Inside</span>
+                    </label>
+                </div>
+            </div>
+        `;
+    }
+    
+    /**
+     * Create Navigation section content
+     */
+    createNavigationSection(container) {
+        container.innerHTML = `
+            <div class="space-y-3">
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="frontView-${this.viewerId}" class="bg-gray-700 hover:bg-gray-600 text-white py-2 px-3 rounded transition-colors text-sm">
+                        Front
+                    </button>
+                    <button id="backView-${this.viewerId}" class="bg-gray-700 hover:bg-gray-600 text-white py-2 px-3 rounded transition-colors text-sm">
+                        Back
+                    </button>
+                    <button id="leftView-${this.viewerId}" class="bg-gray-700 hover:bg-gray-600 text-white py-2 px-3 rounded transition-colors text-sm">
+                        Left
+                    </button>
+                    <button id="rightView-${this.viewerId}" class="bg-gray-700 hover:bg-gray-600 text-white py-2 px-3 rounded transition-colors text-sm">
+                        Right
+                    </button>
+                    <button id="topView-${this.viewerId}" class="bg-gray-700 hover:bg-gray-600 text-white py-2 px-3 rounded transition-colors text-sm">
+                        Top
+                    </button>
+                    <button id="bottomView-${this.viewerId}" class="bg-gray-700 hover:bg-gray-600 text-white py-2 px-3 rounded transition-colors text-sm">
+                        Bottom
+                    </button>
+                </div>
+                <button id="fitToScreen-${this.viewerId}" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors">
+                    Fit to Screen
+                </button>
+            </div>
+        `;
+        
+        // Connect navigation buttons to viewer functionality
+        this.connectNavigationControls();
+    }
+    
+    /**
+     * Connect navigation buttons to viewer camera controls
+     */
+    connectNavigationControls() {
+        const viewerId = this.viewerId;
+        
+        // Connect directional view buttons
+        const frontBtn = document.getElementById(`frontView-${viewerId}`);
+        if (frontBtn) {
+            frontBtn.addEventListener('click', () => {
+                if (this.viewer && this.viewer.setFrontView) {
+                    console.log('Setting front view for viewer:', viewerId);
+                    this.viewer.setFrontView();
+                }
+            });
+        }
+        
+        const backBtn = document.getElementById(`backView-${viewerId}`);
+        if (backBtn) {
+            backBtn.addEventListener('click', () => {
+                if (this.viewer && this.viewer.setBackView) {
+                    console.log('Setting back view for viewer:', viewerId);
+                    this.viewer.setBackView();
+                }
+            });
+        }
+        
+        const leftBtn = document.getElementById(`leftView-${viewerId}`);
+        if (leftBtn) {
+            leftBtn.addEventListener('click', () => {
+                if (this.viewer && this.viewer.setLeftView) {
+                    console.log('Setting left view for viewer:', viewerId);
+                    this.viewer.setLeftView();
+                }
+            });
+        }
+        
+        const rightBtn = document.getElementById(`rightView-${viewerId}`);
+        if (rightBtn) {
+            rightBtn.addEventListener('click', () => {
+                if (this.viewer && this.viewer.setRightView) {
+                    console.log('Setting right view for viewer:', viewerId);
+                    this.viewer.setRightView();
+                }
+            });
+        }
+        
+        const topBtn = document.getElementById(`topView-${viewerId}`);
+        if (topBtn) {
+            topBtn.addEventListener('click', () => {
+                if (this.viewer && this.viewer.setTopView) {
+                    console.log('Setting top view for viewer:', viewerId);
+                    this.viewer.setTopView();
+                }
+            });
+        }
+        
+        const bottomBtn = document.getElementById(`bottomView-${viewerId}`);
+        if (bottomBtn) {
+            bottomBtn.addEventListener('click', () => {
+                if (this.viewer && this.viewer.setBottomView) {
+                    console.log('Setting bottom view for viewer:', viewerId);
+                    this.viewer.setBottomView();
+                }
+            });
+        }
+        
+        const fitBtn = document.getElementById(`fitToScreen-${viewerId}`);
+        if (fitBtn) {
+            fitBtn.addEventListener('click', () => {
+                if (this.viewer && this.viewer.fitToScreen) {
+                    console.log('Fitting to screen for viewer:', viewerId);
+                    this.viewer.fitToScreen();
+                }
+            });
+        }
+    }
+    
+    /**
+     * Create Scene section content
+     */
+    createSceneSection(container) {
+        container.innerHTML = `
+            <div class="space-y-4">
+                <div>
+                    <h4 class="text-sm font-medium text-gray-300 mb-2">Point Clouds</h4>
+                    <div class="bg-gray-800 rounded p-3 text-sm text-gray-400">
+                        <div class="flex items-center justify-between">
+                            <span>No point clouds loaded</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <h4 class="text-sm font-medium text-gray-300 mb-2">Annotations</h4>
+                    <div class="bg-gray-800 rounded p-3 text-sm text-gray-400">
+                        <span>0 annotations</span>
+                    </div>
+                </div>
+                
+                <div>
+                    <h4 class="text-sm font-medium text-gray-300 mb-2">Measurements</h4>
+                    <div class="bg-gray-800 rounded p-3 text-sm text-gray-400">
+                        <span>0 measurements</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    /**
+     * Create Filters section content
+     */
+    createFiltersSection(container) {
+        container.innerHTML = `
+            <div class="space-y-4">
+                <div>
+                    <h4 class="text-sm font-medium text-gray-300 mb-3">Classification</h4>
+                    <div class="space-y-2 max-h-32 overflow-y-auto">
+                        ${[
+                            'Ground', 'Building', 'Vegetation', 'Water', 'Bridge', 'Road', 'Wire', 'Transmission Tower'
+                        ].map(item => `
+                            <label class="flex items-center space-x-3">
+                                <input type="checkbox" class="form-checkbox h-4 w-4 text-blue-600 rounded" checked>
+                                <span class="text-sm text-gray-300">${item}</span>
+                            </label>
+                        `).join('')}
+                    </div>
+                </div>
+                
+                <div class="border-t border-gray-700 pt-4">
+                    <h4 class="text-sm font-medium text-gray-300 mb-3">Returns</h4>
+                    <div class="space-y-2">
+                        <label class="flex items-center space-x-3">
+                            <input type="checkbox" class="form-checkbox h-4 w-4 text-blue-600 rounded" checked>
+                            <span class="text-sm text-gray-300">First Return</span>
+                        </label>
+                        <label class="flex items-center space-x-3">
+                            <input type="checkbox" class="form-checkbox h-4 w-4 text-blue-600 rounded" checked>
+                            <span class="text-sm text-gray-300">Last Return</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    /**
+     * Create About section content
+     */
+    createAboutSection(container) {
+        container.innerHTML = `
+            <div class="space-y-4">
+                <div>
+                    <h4 class="text-sm font-medium text-gray-300 mb-2">Viewer Information</h4>
+                    <div class="bg-gray-800 rounded p-3 space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Viewer ID:</span>
+                            <span class="text-white">${this.viewerId}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Version:</span>
+                            <span class="text-white">MultiViewer 1.0</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Renderer:</span>
+                            <span class="text-white">WebGL</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <h4 class="text-sm font-medium text-gray-300 mb-2">Performance</h4>
+                    <div class="bg-gray-800 rounded p-3 space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">FPS:</span>
+                            <span class="text-green-400">60</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Points:</span>
+                            <span class="text-white">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    /**
+     * Setup event handlers
+     */
+    setupEventHandlers() {
+        // Hamburger button click
+        this.hamburgerButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggle();
+        });
+        
+        // Close button click
+        // Close button removed - only hamburger button controls sidebar now
+        
+        // Section toggle handlers
+        this.sections.forEach((section) => {
+            section.header.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.toggleSection(section.id);
+            });
+        });
+        
+        // Quick action handlers
+        this.quickActionButtons.topView.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.handleTopView();
+        });
+        
+        this.quickActionButtons.lockView.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.handleLockView();
+        });
+        
+        this.quickActionButtons.zoomExtents.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.handleZoomExtents();
+        });
+        
+        // Click outside to close
+        document.addEventListener('click', (e) => {
+            if (this.isOpen && !this.sidebarElement.contains(e.target) && !this.hamburgerButton.contains(e.target)) {
+                this.close();
+            }
+        });
+        
+        // Prevent sidebar clicks from closing
+        this.sidebarElement.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+    }
+    
+    /**
+     * Ensure scoped CSS is loaded (without global Tailwind that affects the whole page)
+     */
+    ensureTailwindCSS() {
+        // Check multiple ways to prevent duplicate CSS injection
+        if (document.getElementById('viewer-sidebar-css') || 
+            document.querySelector('style[data-viewer-sidebar-styles]') ||
+            window.viewerSidebarStylesLoaded) {
+            return;
+        }
+        
+        // Mark as loaded globally to prevent duplicates
+        window.viewerSidebarStylesLoaded = true;
+        
+        // Add only scoped styles instead of full Tailwind CSS to prevent global conflicts
+        const scopedStyles = document.createElement('style');
+        scopedStyles.id = 'viewer-sidebar-css';
+        scopedStyles.setAttribute('data-viewer-sidebar-styles', 'true');
+        scopedStyles.textContent = `
+            /* Scoped Sidebar Styles - Only affects elements with data-viewer-sidebar attribute */
+            [data-viewer-sidebar] {
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            }
+            
+            /* Utility classes scoped to sidebar */
+            [data-viewer-sidebar] .absolute { position: absolute !important; }
+            [data-viewer-sidebar] .relative { position: relative !important; }
+            [data-viewer-sidebar] .top-0 { top: 0 !important; }
+            [data-viewer-sidebar] .left-0 { left: 0 !important; }
+            [data-viewer-sidebar] .h-full { height: 100% !important; }
+            [data-viewer-sidebar] .w-full { width: 100% !important; }
+            [data-viewer-sidebar] .w-5 { width: 1.25rem !important; }
+            [data-viewer-sidebar] .w-4 { width: 1rem !important; }
+            [data-viewer-sidebar] .h-5 { height: 1.25rem !important; }
+            [data-viewer-sidebar] .h-4 { height: 1rem !important; }
+            [data-viewer-sidebar] .flex { display: flex !important; }
+            [data-viewer-sidebar] .flex-1 { flex: 1 1 0% !important; }
+            [data-viewer-sidebar] .items-center { align-items: center !important; }
+            [data-viewer-sidebar] .justify-between { justify-content: space-between !important; }
+            [data-viewer-sidebar] .space-x-3 > * + * { margin-left: 0.75rem !important; }
+            [data-viewer-sidebar] .space-y-3 > * + * { margin-top: 0.75rem !important; }
+            [data-viewer-sidebar] .space-y-4 > * + * { margin-top: 1rem !important; }
+            [data-viewer-sidebar] .px-4 { padding-left: 1rem !important; padding-right: 1rem !important; }
+            [data-viewer-sidebar] .py-2 { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+            [data-viewer-sidebar] .py-3 { padding-top: 0.75rem !important; padding-bottom: 0.75rem !important; }
+            [data-viewer-sidebar] .p-2 { padding: 0.5rem !important; }
+            [data-viewer-sidebar] .p-1\.5 { padding: 0.375rem !important; }
+            [data-viewer-sidebar] .p-1 { padding: 0.25rem !important; }
+            [data-viewer-sidebar] .gap-2 { gap: 0.5rem !important; }
+            [data-viewer-sidebar] .gap-1 { gap: 0.25rem !important; }
+            [data-viewer-sidebar] .pt-3 { padding-top: 0.75rem !important; }
+            [data-viewer-sidebar] .pt-4 { padding-top: 1rem !important; }
+            [data-viewer-sidebar] .mb-2 { margin-bottom: 0.5rem !important; }
+            [data-viewer-sidebar] .mb-3 { margin-bottom: 0.75rem !important; }
+            [data-viewer-sidebar] .min-w-0 { min-width: 0 !important; }
+            [data-viewer-sidebar] .max-h-32 { max-height: 8rem !important; }
+            [data-viewer-sidebar] .overflow-y-auto { overflow-y: auto !important; }
+            [data-viewer-sidebar] .overflow-x-hidden { overflow-x: hidden !important; }
+            [data-viewer-sidebar] .overflow-hidden { overflow: hidden !important; }
+            [data-viewer-sidebar] .rounded { border-radius: 0.25rem !important; }
+            [data-viewer-sidebar] .rounded-lg { border-radius: 0.5rem !important; }
+            [data-viewer-sidebar] .opacity-70 { opacity: 0.7 !important; }
+            [data-viewer-sidebar] .hover\\:opacity-100:hover { opacity: 1 !important; }
+            [data-viewer-sidebar] .border-b { border-bottom-width: 1px !important; }
+            [data-viewer-sidebar] .border-t { border-top-width: 1px !important; }
+            [data-viewer-sidebar] .last\\:border-b-0:last-child { border-bottom-width: 0 !important; }
+            [data-viewer-sidebar] .shadow-2xl { box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important; }
+            [data-viewer-sidebar] .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important; }
+            [data-viewer-sidebar] .z-50 { z-index: 50 !important; }
+            [data-viewer-sidebar] .z-40 { z-index: 40 !important; }
+            [data-viewer-sidebar] .transition-transform { transition-property: transform !important; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important; transition-duration: 300ms !important; }
+            [data-viewer-sidebar] .transition-colors { transition-property: color, background-color, border-color !important; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important; transition-duration: 150ms !important; }
+            [data-viewer-sidebar] .duration-200 { transition-duration: 200ms !important; }
+            [data-viewer-sidebar] .duration-300 { transition-duration: 300ms !important; }
+            
+            /* Button container animation fix - improve smoothness */
+            [data-viewer-sidebar] div[id^="sidebar-buttons-"],
+            .potree-viewer-container div[id^="sidebar-buttons-"] {
+                transition: transform 300ms cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+                will-change: transform !important;
+                transform-origin: left center !important;
+            }
+            
+            /* Sidebar animation improvements */
+            [data-viewer-sidebar] .sidebar-element {
+                transition: transform 300ms cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+            }
+            [data-viewer-sidebar] .ease-in-out { transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important; }
+            [data-viewer-sidebar] .transform { transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y)) !important; }
+            [data-viewer-sidebar] .-translate-x-full { --tw-translate-x: -100% !important; }
+            [data-viewer-sidebar] .translate-x-0 { --tw-translate-x: 0px !important; }
+            [data-viewer-sidebar] .grid { display: grid !important; }
+            [data-viewer-sidebar] .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+            [data-viewer-sidebar] .gap-2 { gap: 0.5rem !important; }
+            [data-viewer-sidebar] .text-left { text-align: left !important; }
+            [data-viewer-sidebar] .text-sm { font-size: 0.875rem !important; line-height: 1.25rem !important; }
+            [data-viewer-sidebar] .text-lg { font-size: 1.125rem !important; line-height: 1.75rem !important; }
+            [data-viewer-sidebar] .font-medium { font-weight: 500 !important; }
+            [data-viewer-sidebar] .font-semibold { font-weight: 600 !important; }
+            [data-viewer-sidebar] .block { display: block !important; }
+            
+            /* Color classes */
+            [data-viewer-sidebar] .bg-gray-900 { background-color: #111827 !important; }
+            [data-viewer-sidebar] .bg-gray-800 { background-color: #1F2937 !important; }
+            [data-viewer-sidebar] .bg-gray-700 { background-color: #374151 !important; }
+            [data-viewer-sidebar] .bg-gray-600 { background-color: #4B5563 !important; }
+            [data-viewer-sidebar] .bg-blue-600 { background-color: #2563EB !important; }
+            [data-viewer-sidebar] .bg-green-600 { background-color: #059669 !important; }
+            [data-viewer-sidebar] .bg-purple-600 { background-color: #9333EA !important; }
+            [data-viewer-sidebar] .bg-red-600 { background-color: #DC2626 !important; }
+            [data-viewer-sidebar] .bg-orange-600 { background-color: #EA580C !important; }
+            [data-viewer-sidebar] .bg-yellow-600 { background-color: #D97706 !important; }
+            [data-viewer-sidebar] .text-white { color: #FFFFFF !important; }
+            [data-viewer-sidebar] .text-gray-300 { color: #D1D5DB !important; }
+            [data-viewer-sidebar] .text-gray-400 { color: #9CA3AF !important; }
+            [data-viewer-sidebar] .text-blue-600 { color: #2563EB !important; }
+            [data-viewer-sidebar] .border-gray-700 { border-color: #374151 !important; }
+            
+            /* Hover states */
+            [data-viewer-sidebar] .hover\\:bg-gray-800:hover { background-color: #1F2937 !important; }
+            [data-viewer-sidebar] .hover\\:bg-gray-600:hover { background-color: #4B5563 !important; }
+            [data-viewer-sidebar] .hover\\:bg-blue-700:hover { background-color: #1D4ED8 !important; }
+            [data-viewer-sidebar] .hover\\:bg-green-700:hover { background-color: #047857 !important; }
+            [data-viewer-sidebar] .hover\\:bg-purple-700:hover { background-color: #7C3AED !important; }
+            [data-viewer-sidebar] .hover\\:bg-red-700:hover { background-color: #B91C1C !important; }
+            [data-viewer-sidebar] .hover\\:bg-orange-700:hover { background-color: #C2410C !important; }
+            [data-viewer-sidebar] .hover\\:bg-yellow-700:hover { background-color: #A16207 !important; }
+            [data-viewer-sidebar] .hover\\:text-white:hover { color: #FFFFFF !important; }
+            
+            /* Focus states */
+            [data-viewer-sidebar] .focus\\:outline-none:focus { outline: 2px solid transparent !important; outline-offset: 2px !important; }
+            [data-viewer-sidebar] .focus\\:ring-2:focus { box-shadow: 0 0 0 2px #3B82F6 !important; }
+            [data-viewer-sidebar] .focus\\:ring-blue-500:focus { box-shadow: 0 0 0 2px #3B82F6 !important; }
+            
+            /* Form elements */
+            [data-viewer-sidebar] input[type="range"] {
+                width: 100%;
+                height: 8px;
+                background: #374151;
+                border-radius: 4px;
+                appearance: none;
+                cursor: pointer;
+            }
+            
+            [data-viewer-sidebar] input[type="range"]::-webkit-slider-thumb {
+                appearance: none;
+                height: 16px;
+                width: 16px;
+                border-radius: 50%;
+                background: #3B82F6;
+                cursor: pointer;
+                border: none;
+            }
+            
+            [data-viewer-sidebar] input[type="range"]::-moz-range-thumb {
+                height: 16px;
+                width: 16px;
+                border-radius: 50%;
+                background: #3B82F6;
+                cursor: pointer;
+                border: none;
+            }
+            
+            [data-viewer-sidebar] input[type="checkbox"] {
+                width: 1rem;
+                height: 1rem;
+                color: #2563EB;
+                border-radius: 0.25rem;
+                border: 1px solid #6B7280;
+                background-color: #1F2937;
+            }
+            
+            [data-viewer-sidebar] input[type="radio"] {
+                width: 1rem;
+                height: 1rem;
+                color: #2563EB;
+                border: 1px solid #6B7280;
+                background-color: #1F2937;
+            }
+            
+            /* SVG icon styling - ensure icons are visible */
+            [data-viewer-sidebar] svg {
+                display: block !important;
+                fill: currentColor !important;
+                stroke: currentColor !important;
+            }
+            
+            /* Button styling */
+            [data-viewer-sidebar] button {
+                display: inline-flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                border: none !important;
+                cursor: pointer !important;
+            }
+            
+            /* Custom scrollbar */
+            [data-viewer-sidebar] .scrollbar-thin::-webkit-scrollbar {
+                width: 6px;
+            }
+            
+            [data-viewer-sidebar] .scrollbar-thin::-webkit-scrollbar-track {
+                background: #1F2937;
+            }
+            
+            [data-viewer-sidebar] .scrollbar-thin::-webkit-scrollbar-thumb {
+                background: #4B5563;
+                border-radius: 3px;
+            }
+            
+            [data-viewer-sidebar] .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+                background: #6B7280;
+            }
+            
+            /* Sidebar positioning fixes */
+            [data-viewer-sidebar] .viewer-sidebar-container {
+                position: absolute !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100% !important;
+                height: 100% !important;
+                pointer-events: none !important;
+                z-index: 1000 !important;
+            }
+            
+            [data-viewer-sidebar] .viewer-sidebar-content {
+                pointer-events: auto !important;
+            }
+            
+            /* Viewport constraint classes */
+            .potree-viewport-container {
+                contain: layout style !important;
+                isolation: isolate !important;
+            }
+            
+            .potree-viewport-container [data-viewer-sidebar] {
+                contain: layout !important;
+            }
+            
+            /* Ensure sidebars are clipped to their viewport */
+            .potree-multi-viewer-container .potree-viewer-container {
+                overflow: hidden !important;
+                contain: strict !important;
+            }
+        `;
+        document.head.appendChild(scopedStyles);
+    }
+    
+    /**
+     * Toggle sidebar open/closed
+     */
+    toggle() {
+        if (this.isOpen) {
+            this.close();
+        } else {
+            this.open();
+        }
+    }
+    
+    /**
+     * Open sidebar
+     */
+    open() {
+        if (this.isOpen) return;
+        
+        this.isOpen = true;
+        
+        // Check for viewport spillover and adjust positioning
+        this.adjustPositionForViewport();
+        
+        // Show sidebar and animate it in
+        this.sidebarElement.style.display = 'block';
+        this.sidebarElement.classList.remove('-translate-x-full');
+        
+        // Animate icons to the right when sidebar opens
+        const sidebarWidth = parseInt(this.config.width);
+        this.buttonsContainer.style.transform = `translateX(${sidebarWidth + 16}px)`; // 16px additional spacing
+        
+        // Update hamburger button
+        this.hamburgerButton.innerHTML = `
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        `;
+        
+        // Populate sections with viewer data
+        this.populateWithViewerData();
+        
+        this.dispatchEvent({
+            type: 'sidebar_opened',
+            viewerId: this.viewerId,
+            sidebar: this
+        });
+    }
+    
+    /**
+     * Close sidebar
+     */
+    close() {
+        if (!this.isOpen) return;
+        
+        this.isOpen = false;
+        
+        // Animate sidebar out and then hide it completely
+        this.sidebarElement.classList.add('-translate-x-full');
+        
+        // After animation completes, hide the sidebar completely to prevent overflow
+        setTimeout(() => {
+            if (!this.isOpen) { // Double-check it wasn't reopened during animation
+                this.sidebarElement.style.display = 'none';
+            }
+        }, 300); // Match animation duration
+        
+        // Animate icons back to original position when sidebar closes
+        this.buttonsContainer.style.transform = 'translateX(0px)';
+        
+        // Update hamburger button
+        this.hamburgerButton.innerHTML = `
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+        `;
+        
+        this.dispatchEvent({
+            type: 'sidebar_closed',
+            viewerId: this.viewerId,
+            sidebar: this
+        });
+    }
+    
+    /**
+     * Adjust sidebar position to prevent spillover into other viewports
+     */
+    adjustPositionForViewport() {
+        if (!this.containerElement || !this.sidebarElement) return;
+        
+        const viewerRect = this.containerElement.getBoundingClientRect();
+        const sidebarWidth = parseInt(this.config.width, 10);
+        
+        // Check if sidebar would spill into other viewports
+        const availableWidth = viewerRect.width;
+        const availableHeight = viewerRect.height;
+        
+        // Constrain sidebar to viewer boundaries
+        let finalWidth = sidebarWidth;
+        let finalHeight = availableHeight * 0.95;
+        
+        if (sidebarWidth > availableWidth * 0.8) {
+            // Reduce sidebar width if viewer is too small
+            finalWidth = Math.max(250, availableWidth * 0.7);
+        }
+        
+        // Apply constraints
+        this.sidebarElement.style.width = `${finalWidth}px`;
+        this.sidebarElement.style.maxHeight = `${finalHeight}px`;
+        
+        // Ensure content container has proper max height
+        const headerHeight = 60; // Approximate header height
+        this.contentContainer.style.maxHeight = `${finalHeight - headerHeight}px`;
+        
+        // Add clip constraint to prevent any spillover beyond viewer bounds
+        this.containerElement.style.clipPath = `inset(0 0 0 0)`;
+        this.containerElement.style.overflow = 'hidden'; // Override previous setting for strict containment
+        
+        // Update icon animation offset based on final sidebar width
+        if (this.isOpen) {
+            this.buttonsContainer.style.transform = `translateX(${finalWidth + 16}px)`;
+        }
+    }
+    
+    /**
+     * Toggle section expanded/collapsed state
+     */
+    toggleSection(sectionId) {
+        const section = this.sections.get(sectionId);
+        if (!section) return;
+        
+        if (section.isOpen) {
+            this.collapseSection(section);
+        } else {
+            this.expandSection(section);
+        }
+    }
+    
+    /**
+     * Expand section
+     */
+    expandSection(section) {
+        section.isOpen = true;
+        section.content.style.maxHeight = section.content.scrollHeight + 'px';
+        section.chevron.style.transform = 'rotate(90deg)';
+        this.activeSections.add(section.id);
+    }
+    
+    /**
+     * Collapse section
+     */
+    collapseSection(section) {
+        section.isOpen = false;
+        section.content.style.maxHeight = '0px';
+        section.chevron.style.transform = 'rotate(0deg)';
+        this.activeSections.delete(section.id);
+    }
+    
+    /**
+     * Populate sections with current viewer data
+     */
+    populateWithViewerData() {
+        // This integrates with actual viewer properties based on real Potree sidebar
+        console.log(`Populating sidebar with data for viewer '${this.viewerId}'`);
+        
+        if (!this.viewer) return;
+        
+        // The controls are already connected when sections are created
+        // No need to recreate HTML, just ensure functionality is working
+        console.log('Sidebar controls should be functional for viewer:', this.viewerId);
+    }
+    
+    /**
+     * Handle top view quick action
+     */
+    handleTopView() {
+        if (this.viewer && this.viewer.scene && this.viewer.scene.view) {
+            // Set camera to top view
+            const view = this.viewer.scene.view;
+            const scene = this.viewer.scene;
+            
+            if (scene.pointclouds && scene.pointclouds.length > 0) {
+                // Use first point cloud for positioning
+                const pointcloud = scene.pointclouds[0];
+                const boundingBox = pointcloud.boundingBox;
+                
+                if (boundingBox) {
+                    const center = boundingBox.getCenter(new THREE.Vector3());
+                    const size = boundingBox.getSize(new THREE.Vector3());
+                    
+                    // Position camera above the center
+                    view.position.set(center.x, center.y, center.z + size.z * 2);
+                    view.lookAt(center.x, center.y, center.z);
+                    
+                    console.log(`Set top view for viewer '${this.viewerId}'`);
+                }
+            }
+        }
+        
+        this.quickActions.topView = true;
+        this.updateQuickActionStates();
+    }
+    
+    /**
+     * Handle lock view quick action
+     */
+    handleLockView() {
+        this.quickActions.lockView = !this.quickActions.lockView;
+        
+        if (this.quickActions.lockView) {
+            // Store current view state and disable controls
+            this.quickActions.lastViewState = this.captureViewState();
+            this.disableViewerControls();
+            
+            this.quickActionButtons.lockView.classList.add('bg-red-600', 'hover:bg-red-500');
+            this.quickActionButtons.lockView.classList.remove('bg-gray-600', 'hover:bg-gray-500');
+        } else {
+            // Re-enable controls
+            this.enableViewerControls();
+            
+            this.quickActionButtons.lockView.classList.remove('bg-red-600', 'hover:bg-red-500');
+            this.quickActionButtons.lockView.classList.add('bg-gray-600', 'hover:bg-gray-500');
+        }
+        
+        console.log(`View lock ${this.quickActions.lockView ? 'enabled' : 'disabled'} for viewer '${this.viewerId}'`);
+        this.updateQuickActionStates();
+    }
+    
+    /**
+     * Handle zoom to extents quick action
+     */
+    handleZoomExtents() {
+        if (this.viewer && this.viewer.scene) {
+            const scene = this.viewer.scene;
+            
+            if (scene.pointclouds && scene.pointclouds.length > 0) {
+                // Zoom to fit all point clouds
+                scene.view.fitToScreen();
+                console.log(`Zoomed to extents for viewer '${this.viewerId}'`);
+            } else {
+                console.warn(`No point clouds to zoom to in viewer '${this.viewerId}'`);
+            }
+        }
+    }
+    
+    /**
+     * Capture current view state
+     */
+    captureViewState() {
+        if (!this.viewer || !this.viewer.scene) return null;
+        
+        const view = this.viewer.scene.view;
+        return {
+            position: view.position.clone(),
+            rotation: view.rotation ? view.rotation.clone() : null,
+            yaw: view.yaw,
+            pitch: view.pitch,
+            radius: view.radius
+        };
+    }
+    
+    /**
+     * Disable viewer controls
+     */
+    disableViewerControls() {
+        // This would integrate with actual viewer controls
+        // Placeholder for now
+        console.log(`Disabled controls for viewer '${this.viewerId}'`);
+    }
+    
+    /**
+     * Enable viewer controls
+     */
+    enableViewerControls() {
+        // This would integrate with actual viewer controls
+        // Placeholder for now
+        console.log(`Enabled controls for viewer '${this.viewerId}'`);
+    }
+    
+    /**
+     * Update quick action button states
+     */
+    updateQuickActionStates() {
+        // Update button appearances based on state
+        if (this.quickActions.topView) {
+            this.quickActionButtons.topView.classList.add('bg-blue-600', 'hover:bg-blue-500');
+            this.quickActionButtons.topView.classList.remove('bg-gray-600', 'hover:bg-gray-500');
+        }
+    }
+    
+    /**
+     * Get sidebar state
+     */
+    getState() {
+        return {
+            isOpen: this.isOpen,
+            activeSections: Array.from(this.activeSections),
+            quickActions: { ...this.quickActions }
+        };
+    }
+    
+    /**
+     * Restore sidebar state
+     */
+    setState(state) {
+        if (state.isOpen && !this.isOpen) {
+            this.open();
+        } else if (!state.isOpen && this.isOpen) {
+            this.close();
+        }
+        
+        if (state.activeSections) {
+            this.activeSections.clear();
+            state.activeSections.forEach(sectionId => {
+                this.activeSections.add(sectionId);
+                const section = this.sections.get(sectionId);
+                if (section) {
+                    this.expandSection(section);
+                }
+            });
+        }
+        
+        if (state.quickActions) {
+            Object.assign(this.quickActions, state.quickActions);
+            this.updateQuickActionStates();
+        }
+    }
+    
+    /**
+     * Destroy sidebar and cleanup resources
+     */
+    destroy() {
+        // Remove event listeners
+        if (this.hamburgerButton) {
+            this.hamburgerButton.remove();
+        }
+        
+        if (this.sidebarElement) {
+            this.sidebarElement.remove();
+        }
+        
+        // Clear sections
+        this.sections.clear();
+        this.activeSections.clear();
+        
+        // Clear references
+        this.containerElement = null;
+        this.sidebarElement = null;
+        this.hamburgerButton = null;
+        this.quickActionButtons = null;
+        this.contentContainer = null;
+        
+        this.removeAllListeners();
+        
+        console.log(`ViewerSidebar destroyed for viewer '${this.viewerId}'`);
+    }
+}

@@ -279,6 +279,12 @@ export class Viewer extends EventDispatcher{
 					speed = speed / 5;
 					this.setMoveSpeed(speed);
 				}
+				
+				// Apply viewer's point budget to newly added point cloud
+				if (e.pointcloud && this._pointBudget) {
+					e.pointcloud.pointBudget = this._pointBudget;
+					console.log(`Applied point budget ${this._pointBudget} to newly loaded point cloud`);
+				}
 			};
 
 			let onVolumeRemoved = (e) => {
@@ -304,6 +310,9 @@ export class Viewer extends EventDispatcher{
 		}
 
 		{ // set defaults
+			// Initialize per-viewer point budget
+			this._pointBudget = 1*1000*1000;
+			
 			this.setFOV(60);
 			this.setEDLEnabled(false);
 			this.setEDLRadius(1.4);
@@ -579,14 +588,32 @@ export class Viewer extends EventDispatcher{
 	}
 
 	setPointBudget (value) {
-		if (Potree.pointBudget !== value) {
-			Potree.pointBudget = parseInt(value);
-			this.dispatchEvent({'type': 'point_budget_changed', 'viewer': this});
+		const newValue = parseInt(value);
+		
+		// Store per-viewer point budget
+		if (!this._pointBudget) {
+			this._pointBudget = newValue;
+		} else if (this._pointBudget === newValue) {
+			return; // No change
 		}
+		
+		this._pointBudget = newValue;
+		
+		// Apply point budget to all point clouds in this viewer's scene
+		if (this.scene && this.scene.pointclouds) {
+			for (let pointcloud of this.scene.pointclouds) {
+				if (pointcloud.pointBudget !== undefined) {
+					pointcloud.pointBudget = newValue;
+				}
+			}
+		}
+		
+		console.log(`Viewer point budget set to ${newValue} for ${(this.scene && this.scene.pointclouds && this.scene.pointclouds.length) || 0} point clouds`);
+		this.dispatchEvent({'type': 'point_budget_changed', 'viewer': this});
 	};
 
 	getPointBudget () {
-		return Potree.pointBudget;
+		return this._pointBudget || Potree.pointBudget;
 	};
 
 	setShowAnnotations (value) {

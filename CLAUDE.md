@@ -140,3 +140,8 @@ When adding new tools to the multi-viewport system:
 - Various gulp plugins for asset processing
 
 All examples require the full dependency stack - attempting to minimize dependencies often breaks functionality.
+
+**NOTES**
+- always write optimized code
+- when having a to do list always stop after checking one off, i must allow you to proceed
+- when writing code in the src/ files always leave a comment "CUSTOM" so i know if something was changed by you
