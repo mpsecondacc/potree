@@ -11,6 +11,7 @@
 
 import * as THREE from "../../libs/three.js/build/three.module.js";
 import {Utils} from "../utils.js";
+import {ElevationGradientRepeat} from "../defines.js";
 
 export class MultiViewerSidebar {
     
@@ -40,6 +41,8 @@ export class MultiViewerSidebar {
                     this.initAppearance();
                     this.initTools();
                     this.initScene();
+                    console.log(`About to initialize FILTERS for viewer ${this.viewerId}`);
+                    this.initFilters();
                     
                     // Create hamburger button after everything is set up
                     this.createHamburgerButton();
@@ -1459,13 +1462,117 @@ export class MultiViewerSidebar {
                     </select>
                 </li>
 
-                <div class="divider" id="materials_rgb_container_${this.viewerId}">
-                    <span>RGB</span>
+                <!-- COMPOSITE WEIGHT CONTAINER -->
+                <div id="materials_composite_weight_container_${this.viewerId}" style="display: none;">
+                    <div class="divider">
+                        <span>Attribute Weights</span>
+                    </div>
+                    <li>RGB: <span id="lblWeightRGB_${this.viewerId}"></span> <div id="sldWeightRGB_${this.viewerId}"></div></li>
+                    <li>Intensity: <span id="lblWeightIntensity_${this.viewerId}"></span> <div id="sldWeightIntensity_${this.viewerId}"></div></li>
+                    <li>Elevation: <span id="lblWeightElevation_${this.viewerId}"></span> <div id="sldWeightElevation_${this.viewerId}"></div></li>
+                    <li>Classification: <span id="lblWeightClassification_${this.viewerId}"></span> <div id="sldWeightClassification_${this.viewerId}"></div></li>
+                    <li>Return Number: <span id="lblWeightReturnNumber_${this.viewerId}"></span> <div id="sldWeightReturnNumber_${this.viewerId}"></div></li>
+                    <li>Source ID: <span id="lblWeightSourceID_${this.viewerId}"></span> <div id="sldWeightSourceID_${this.viewerId}"></div></li>
                 </div>
-                <div id="materials_rgb_controls_${this.viewerId}">
+
+                <!-- RGB CONTAINER -->
+                <div id="materials_rgb_container_${this.viewerId}" style="display: none;">
+                    <div class="divider">
+                        <span>RGB</span>
+                    </div>
                     <li>Gamma: <span id="lblRGBGamma_${this.viewerId}"></span> <div id="sldRGBGamma_${this.viewerId}"></div></li>
                     <li>Brightness: <span id="lblRGBBrightness_${this.viewerId}"></span> <div id="sldRGBBrightness_${this.viewerId}"></div></li>
                     <li>Contrast: <span id="lblRGBContrast_${this.viewerId}"></span> <div id="sldRGBContrast_${this.viewerId}"></div></li>
+                </div>
+
+                <!-- INTENSITY CONTAINER -->
+                <div id="materials_intensity_container_${this.viewerId}" style="display: none;">
+                    <div class="divider">
+                        <span>Intensity</span>
+                    </div>
+                    <li>Range: <span id="lblIntensityRange_${this.viewerId}"></span> <div id="sldIntensityRange_${this.viewerId}"></div></li>
+                    <li>Gamma: <span id="lblIntensityGamma_${this.viewerId}"></span> <div id="sldIntensityGamma_${this.viewerId}"></div></li>
+                    <li>Brightness: <span id="lblIntensityBrightness_${this.viewerId}"></span> <div id="sldIntensityBrightness_${this.viewerId}"></div></li>
+                    <li>Contrast: <span id="lblIntensityContrast_${this.viewerId}"></span> <div id="sldIntensityContrast_${this.viewerId}"></div></li>
+                </div>
+
+                <!-- ELEVATION CONTAINER -->
+                <div id="materials_elevation_container_${this.viewerId}" style="display: none;">
+                    <div class="divider">
+                        <span>Elevation</span>
+                    </div>
+                    <li>Elevation Range: <span id="lblHeightRange_${this.viewerId}"></span> <div id="sldHeightRange_${this.viewerId}"></div></li>
+                    <li>
+                        <selectgroup id="gradient_repeat_option_${this.viewerId}">
+                            <option id="gradient_repeat_clamp_${this.viewerId}" value="CLAMP">Clamp</option>
+                            <option id="gradient_repeat_repeat_${this.viewerId}" value="REPEAT">Repeat</option>
+                            <option id="gradient_repeat_mirrored_repeat_${this.viewerId}" value="MIRRORED_REPEAT">Mirrored Repeat</option>
+                        </selectgroup>
+                    </li>
+                    <li>
+                        <span>Gradient Scheme:</span>
+                        <div id="elevation_gradient_scheme_selection_${this.viewerId}" class="gradient_scheme" style="display: flex; padding: 1em 0em"></div>
+                    </li>
+                </div>
+
+                <!-- EXTRA ATTRIBUTE CONTAINER -->
+                <div id="materials_extra_container_${this.viewerId}" style="display: none;">
+                    <div class="divider">
+                        <span>Extra Attribute</span>
+                    </div>
+                    <li>Extra Range: <span id="lblExtraRange_${this.viewerId}"></span> <div id="sldExtraRange_${this.viewerId}"></div></li>
+                    <li>
+                        <selectgroup id="extra_gradient_repeat_option_${this.viewerId}">
+                            <option id="extra_gradient_repeat_clamp_${this.viewerId}" value="CLAMP">Clamp</option>
+                            <option id="extra_gradient_repeat_repeat_${this.viewerId}" value="REPEAT">Repeat</option>
+                            <option id="extra_gradient_repeat_mirrored_repeat_${this.viewerId}" value="MIRRORED_REPEAT">Mirrored Repeat</option>
+                        </selectgroup>
+                    </li>
+                    <li>
+                        <span>Gradient Scheme:</span>
+                        <div id="extra_gradient_scheme_selection_${this.viewerId}" class="gradient_scheme" style="display: flex; padding: 1em 0em"></div>
+                    </li>
+                </div>
+
+                <!-- MATCAP CONTAINER -->
+                <div id="materials_matcap_container_${this.viewerId}" style="display: none;">
+                    <div class="divider">
+                        <span>MATCAP</span>
+                    </div>
+                    <li>
+                        <div id="matcap_scheme_selection_${this.viewerId}" style="display: flex; flex-wrap: wrap;"></div>
+                    </li>
+                </div>
+
+                <!-- COLOR CONTAINER -->
+                <div id="materials_color_container_${this.viewerId}" style="display: none;">
+                    <div class="divider">
+                        <span>Color</span>
+                    </div>
+                    <li>
+                        <input id="materials_color_picker_${this.viewerId}" type="color" />
+                    </li>
+                </div>
+
+                <!-- INDEX CONTAINER -->
+                <div id="materials_index_container_${this.viewerId}" style="display: none;">
+                    <div class="divider">
+                        <span>Indices</span>
+                    </div>
+                </div>
+
+                <!-- TRANSITION CONTAINER -->
+                <div id="materials_transition_container_${this.viewerId}" style="display: none;">
+                    <div class="divider">
+                        <span>Transition</span>
+                    </div>
+                </div>
+
+                <!-- GPS TIME CONTAINER -->
+                <div id="materials_gpstime_container_${this.viewerId}" style="display: none;">
+                    <div class="divider">
+                        <span>GPS Time</span>
+                    </div>
                 </div>
                 
                 </ul>
@@ -1481,7 +1588,17 @@ export class MultiViewerSidebar {
         this.initShapeSelector(material);
         this.initOpacitySlider(material);
         this.initMaterialSelector(material, pointcloud);
-        this.initRGBSliders(material);
+        
+        // Initialize all conditional containers
+        this.initCompositeWeightControls(material, pointcloud);
+        this.initRGBControls(material);
+        this.initIntensityControls(material, pointcloud);
+        this.initElevationControls(material, pointcloud);
+        this.initExtraControls(material, pointcloud);
+        this.initMatcapControls(material);
+        this.initColorControls(material);
+        
+        console.log(`✅ All point cloud property controls initialized for viewer ${this.viewerId}`);
     }
     
     /**
@@ -1754,8 +1871,8 @@ export class MultiViewerSidebar {
                         material.activeAttributeName = selectedValue;
                         console.log(`6.5 ✅ Material attribute changed: ${oldValue} → ${selectedValue} for viewer ${this.viewerId}`);
                         
-                        // Update RGB container visibility
-                        this.updateRGBContainerVisibility(selectedValue);
+                        // Update material container visibility
+                        this.updateMaterialContainerVisibility(selectedValue);
                     } else {
                         console.error('6.6 ❌ material.activeAttributeName is undefined or null');
                     }
@@ -1818,7 +1935,7 @@ export class MultiViewerSidebar {
         
         // === 8. RGB CONTAINER VISIBILITY ===
         console.log('8. Setting initial RGB container visibility...');
-        this.updateRGBContainerVisibility(initialValue);
+        this.updateMaterialContainerVisibility(initialValue);
         
         // === 9. MATERIAL EVENT LISTENERS ===
         console.log('9. Setting up material event listeners...');
@@ -1837,7 +1954,7 @@ export class MultiViewerSidebar {
                     console.log('9.3 Selectmenu refresh failed in event listener:', error.message);
                 }
                 
-                this.updateRGBContainerVisibility(material.activeAttributeName);
+                this.updateMaterialContainerVisibility(material.activeAttributeName);
             };
             
             material.addEventListener("point_color_type_changed", update);
@@ -1852,24 +1969,84 @@ export class MultiViewerSidebar {
     }
     
     /**
-     * Update RGB container visibility based on selected attribute - CUSTOM implementation
+     * Update all material container visibility based on selected attribute - CUSTOM implementation
+     * Replicates the original PropertiesPanel conditional visibility system
      */
-    updateRGBContainerVisibility(attributeName) {
-        const rgbContainer = this.dom.find(`#materials_rgb_container_${this.viewerId}`);
-        const rgbControls = this.dom.find(`#materials_rgb_controls_${this.viewerId}`);
+    updateMaterialContainerVisibility(attributeName) {
+        console.log(`🎨 Updating material container visibility for attribute '${attributeName}' in viewer ${this.viewerId}`);
         
-        // Show RGB controls for RGB-related attributes
-        const showRGB = attributeName && ['rgb', 'color', 'composite'].includes(attributeName.toLowerCase());
+        // Get all material containers
+        const containers = {
+            weights: this.dom.find(`#materials_composite_weight_container_${this.viewerId}`),
+            rgb: this.dom.find(`#materials_rgb_container_${this.viewerId}`),
+            intensity: this.dom.find(`#materials_intensity_container_${this.viewerId}`),
+            elevation: this.dom.find(`#materials_elevation_container_${this.viewerId}`),
+            extra: this.dom.find(`#materials_extra_container_${this.viewerId}`),
+            color: this.dom.find(`#materials_color_container_${this.viewerId}`),
+            matcap: this.dom.find(`#materials_matcap_container_${this.viewerId}`),
+            index: this.dom.find(`#materials_index_container_${this.viewerId}`),
+            transition: this.dom.find(`#materials_transition_container_${this.viewerId}`),
+            gpstime: this.dom.find(`#materials_gpstime_container_${this.viewerId}`)
+        };
         
-        if (showRGB) {
-            rgbContainer.show();
-            rgbControls.show();
+        // Hide all containers first
+        Object.values(containers).forEach(container => container.hide());
+        
+        // Show containers based on selected attribute (matching original logic)
+        const selectedValue = attributeName ? attributeName.toLowerCase() : '';
+        
+        if (selectedValue === 'composite') {
+            containers.weights.show();
+            containers.elevation.show();
+            containers.rgb.show();
+            containers.intensity.show();
+            console.log('  ✅ Showing: weights, elevation, rgb, intensity (composite mode)');
+        } else if (selectedValue === 'elevation') {
+            containers.elevation.show();
+            console.log('  ✅ Showing: elevation');
+        } else if (selectedValue === 'rgb and elevation') {
+            containers.rgb.show();
+            containers.elevation.show();
+            console.log('  ✅ Showing: rgb, elevation');
+        } else if (selectedValue === 'rgba' || selectedValue === 'rgb') {
+            containers.rgb.show();
+            console.log('  ✅ Showing: rgb');
+        } else if (selectedValue === 'color') {
+            containers.color.show();
+            console.log('  ✅ Showing: color picker');
+        } else if (selectedValue === 'intensity') {
+            containers.intensity.show();
+            console.log('  ✅ Showing: intensity');
+        } else if (selectedValue === 'intensity gradient') {
+            containers.intensity.show();
+            console.log('  ✅ Showing: intensity (gradient mode)');
+        } else if (selectedValue === 'indices') {
+            containers.index.show();
+            console.log('  ✅ Showing: index');
+        } else if (selectedValue === 'matcap') {
+            containers.matcap.show();
+            console.log('  ✅ Showing: matcap');
+        } else if (selectedValue === 'level of detail') {
+            // Level of detail typically doesn't have additional controls, but show extra container for consistency
+            containers.extra.show();
+            console.log('  ✅ Showing: extra container for level of detail');
+        } else if (selectedValue === 'classification') {
+            // Classification doesn't have additional controls in original
+            console.log('  ✅ Classification selected (no additional controls)');
+        } else if (selectedValue === 'gps-time') {
+            containers.gpstime.show();
+            console.log('  ✅ Showing: gps-time');
+        } else if (selectedValue === 'number of returns') {
+            console.log('  ✅ Number of returns selected (no additional controls)');
+        } else if (selectedValue === 'return number') {
+            console.log('  ✅ Return number selected (no additional controls)');
+        } else if (['source id', 'point source id'].includes(selectedValue)) {
+            console.log('  ✅ Source ID selected (no additional controls)');
         } else {
-            rgbContainer.hide();
-            rgbControls.hide();
+            // Default to extra container for unknown attributes
+            containers.extra.show();
+            console.log('  ✅ Showing: extra (default for unknown attribute)');
         }
-        
-        console.log(`RGB container visibility: ${showRGB ? 'visible' : 'hidden'} for attribute '${attributeName}' in viewer ${this.viewerId}`);
     }
     
     /**
@@ -1930,7 +2107,7 @@ export class MultiViewerSidebar {
             
             // Test RGB visibility
             const sidebar = viewer.sidebar;
-            sidebar.updateRGBContainerVisibility(attributeName);
+            sidebar.updateMaterialContainerVisibility(attributeName);
             
             console.groupEnd();
         };
@@ -1941,9 +2118,40 @@ export class MultiViewerSidebar {
     }
     
     /**
-     * Initialize RGB sliders
+     * Initialize composite weight controls - CUSTOM implementation
      */
-    initRGBSliders(material) {
+    initCompositeWeightControls(material, pointcloud) {
+        console.log(`Initializing composite weight controls for viewer ${this.viewerId}`);
+        
+        const weights = ['RGB', 'Intensity', 'Elevation', 'Classification', 'ReturnNumber', 'SourceID'];
+        
+        weights.forEach(weight => {
+            const slider = this.dom.find(`#sldWeight${weight}_${this.viewerId}`);
+            const label = this.dom.find(`#lblWeight${weight}_${this.viewerId}`);
+            
+            if (slider.length > 0) {
+                const currentValue = material[`weight${weight}`] || 1.0;
+                
+                slider.slider({
+                    value: currentValue,
+                    min: 0,
+                    max: 1,
+                    step: 0.01,
+                    slide: (event, ui) => {
+                        material[`weight${weight}`] = ui.value;
+                        label.html(ui.value.toFixed(2));
+                    }
+                });
+                
+                label.html(currentValue.toFixed(2));
+            }
+        });
+    }
+    
+    /**
+     * Initialize RGB controls - CUSTOM implementation
+     */
+    initRGBControls(material) {
         // RGB Gamma
         const sldRGBGamma = this.dom.find(`#sldRGBGamma_${this.viewerId}`);
         const lblRGBGamma = this.dom.find(`#lblRGBGamma_${this.viewerId}`);
@@ -2003,6 +2211,412 @@ export class MultiViewerSidebar {
             }
         });
         lblRGBContrast.html(currentContrast.toFixed(2));
+    }
+    
+    /**
+     * Initialize intensity controls - CUSTOM implementation
+     */
+    initIntensityControls(material, pointcloud) {
+        console.log(`Initializing intensity controls for viewer ${this.viewerId}`);
+        
+        // Get intensity attribute from point cloud
+        const intensityAttribute = pointcloud.getAttribute ? pointcloud.getAttribute('intensity') : null;
+        
+        // Intensity Range
+        const sldIntensityRange = this.dom.find(`#sldIntensityRange_${this.viewerId}`);
+        const lblIntensityRange = this.dom.find(`#lblIntensityRange_${this.viewerId}`);
+        
+        if (sldIntensityRange.length > 0) {
+            let attributeMin = 0;
+            let attributeMax = 65535;
+            
+            // Get intensity range from attribute if available
+            if (intensityAttribute && intensityAttribute.range) {
+                [attributeMin, attributeMax] = intensityAttribute.range;
+            }
+            
+            // Initialize material intensity range if needed or invalid
+            if (!material.intensityRange || 
+                !Array.isArray(material.intensityRange) ||
+                material.intensityRange[0] === Infinity || 
+                material.intensityRange[1] === -Infinity ||
+                material.intensityRange[0] >= material.intensityRange[1]) {
+                material.intensityRange = [attributeMin, attributeMax];
+            }
+            
+            console.log(`Intensity attribute range: [${attributeMin}, ${attributeMax}]`);
+            console.log(`Material intensity range: [${material.intensityRange[0]}, ${material.intensityRange[1]}]`);
+            
+            sldIntensityRange.slider({
+                range: true,
+                min: attributeMin,
+                max: attributeMax,
+                step: Math.max(1, Math.floor((attributeMax - attributeMin) / 1000)),
+                values: material.intensityRange,
+                slide: (event, ui) => {
+                    material.intensityRange = ui.values;
+                    lblIntensityRange.html(`${parseInt(ui.values[0])} to ${parseInt(ui.values[1])}`);
+                    console.log(`Intensity range changed: [${ui.values[0]}, ${ui.values[1]}]`);
+                }
+            });
+            
+            lblIntensityRange.html(`${parseInt(material.intensityRange[0])} to ${parseInt(material.intensityRange[1])}`);
+        } else {
+            console.warn(`Intensity range slider element not found for viewer ${this.viewerId}`);
+        }
+        
+        // Intensity Gamma, Brightness, Contrast
+        const intensityControls = ['Gamma', 'Brightness', 'Contrast'];
+        intensityControls.forEach(control => {
+            const slider = this.dom.find(`#sldIntensity${control}_${this.viewerId}`);
+            const label = this.dom.find(`#lblIntensity${control}_${this.viewerId}`);
+            
+            if (slider.length > 0) {
+                const propertyName = `intensity${control}`;
+                const currentValue = material[propertyName] || (control === 'Gamma' ? 1.0 : 0.0);
+                const minVal = control === 'Gamma' ? 0.1 : -1;
+                const maxVal = control === 'Gamma' ? 4 : 1;
+                
+                slider.slider({
+                    value: currentValue,
+                    min: minVal,
+                    max: maxVal,
+                    step: 0.01,
+                    slide: (event, ui) => {
+                        material[propertyName] = ui.value;
+                        label.html(ui.value.toFixed(2));
+                    }
+                });
+                
+                label.html(currentValue.toFixed(2));
+            }
+        });
+    }
+    
+    /**
+     * Initialize elevation controls - CUSTOM implementation
+     */
+    initElevationControls(material, pointcloud) {
+        console.log(`Initializing elevation controls for viewer ${this.viewerId}`);
+        
+        // CUSTOM - Exact copy of original updateHeightRange logic from PropertiesPanel.js
+        let bMin, bMax;
+        
+        const aPosition = pointcloud.getAttribute("position");
+        
+        if (aPosition) {
+            // For new format 2.0 and loader that contain precomputed min/max of attributes
+            let min = aPosition.range[0][2];
+            let max = aPosition.range[1][2];
+            let width = max - min;
+            
+            bMin = min - 0.2 * width;
+            bMax = max + 0.2 * width;
+            console.log(`Position attribute range with padding: [${bMin.toFixed(2)}, ${bMax.toFixed(2)}] (original: [${min.toFixed(2)}, ${max.toFixed(2)}])`);
+        } else {
+            // Fallback: use first available bounding box
+            let box = [pointcloud.getBoundingBoxWorld, () => pointcloud.boundingBox, () => pointcloud.pcoGeometry && pointcloud.pcoGeometry.boundingBox]
+                .map(f => {
+                    try { return f(); } catch (e) { return undefined; }
+                })
+                .find(v => v !== undefined);
+            
+            if (box) {
+                pointcloud.updateMatrixWorld(true);
+                // Note: Utils.computeTransformedBoundingBox would be needed here but not available
+                // Using direct box values as fallback
+                let bWidth = box.max.z - box.min.z;
+                bMin = box.min.z - 0.2 * bWidth;
+                bMax = box.max.z + 0.2 * bWidth;
+                console.log(`Bounding box fallback range: [${bMin.toFixed(2)}, ${bMax.toFixed(2)}]`);
+            } else {
+                bMin = 0;
+                bMax = 100;
+                console.warn('No elevation bounds found, using default range');
+            }
+        }
+        
+        // Elevation Range Slider - CUSTOM using exact original logic
+        const sldHeightRange = this.dom.find(`#sldHeightRange_${this.viewerId}`);
+        const lblHeightRange = this.dom.find(`#lblHeightRange_${this.viewerId}`);
+        
+        if (sldHeightRange.length > 0) {
+            // CUSTOM - The material already has correct elevation range, use it for bounds too
+            let range = material.elevationRange;
+            
+            console.log(`🔍 ELEVATION SLIDER DEBUG:`);
+            console.log(`  Original material.elevationRange:`, range);
+            console.log(`  Calculated bounds [bMin, bMax]:`, [bMin, bMax]);
+            
+            if (!range || !Array.isArray(range) || range.length !== 2) {
+                // Only use calculated bounds if material doesn't have valid range
+                console.log(`  ⚠️ Material elevation range invalid, using calculated bounds`);
+                range = [bMin, bMax];
+                material.elevationRange = range;
+            } else {
+                // Material has valid range - use it for both bounds and values
+                // Add some padding to bounds (like original does with 0.2 * width)
+                const width = range[1] - range[0];
+                bMin = range[0] - 0.2 * width;
+                bMax = range[1] + 0.2 * width;
+                console.log(`  ✅ Using material range with padding: bounds [${bMin.toFixed(2)}, ${bMax.toFixed(2)}]`);
+            }
+            
+            console.log(`  Final range values:`, range);
+            console.log(`  Final slider bounds:`, [bMin, bMax]);
+            
+            // Set label first
+            lblHeightRange.html(`${range[0].toFixed(2)} to ${range[1].toFixed(2)}`);
+            
+            // Destroy any existing slider first
+            if (sldHeightRange.hasClass('ui-slider')) {
+                sldHeightRange.slider('destroy');
+            }
+            
+            // Initialize slider with corrected bounds
+            sldHeightRange.slider({
+                range: true,
+                min: bMin,
+                max: bMax, 
+                step: 0.01,
+                values: range,
+                slide: (event, ui) => {
+                    material.elevationRange = ui.values;
+                    lblHeightRange.html(`${ui.values[0].toFixed(2)} to ${ui.values[1].toFixed(2)}`);
+                    console.log(`Elevation range changed: [${ui.values[0].toFixed(2)}, ${ui.values[1].toFixed(2)}]`);
+                }
+            });
+            
+            // Verify slider was set correctly
+            const actualMin = sldHeightRange.slider('option', 'min');
+            const actualMax = sldHeightRange.slider('option', 'max');
+            const actualValues = sldHeightRange.slider('option', 'values');
+            console.log(`  ✅ Slider initialized - min: ${actualMin}, max: ${actualMax}, values: [${actualValues}]`);
+        }
+        
+        // Gradient Repeat Option (using selectgroup - button group)
+        const gradientRepeat = this.dom.find(`#gradient_repeat_option_${this.viewerId}`);
+        if (gradientRepeat.length > 0) {
+            gradientRepeat.selectgroup({title: "Gradient"});
+            
+            gradientRepeat.find("input").click((event) => {
+                event.stopPropagation();
+                const value = event.target.value;
+                
+                // CUSTOM - Exact copy of original logic
+                this.viewer.setElevationGradientRepeat(ElevationGradientRepeat[value]);
+                console.log(`Elevation gradient repeat set to: ${value} (${ElevationGradientRepeat[value]}) for viewer ${this.viewerId}`);
+            });
+            
+            // Set initial state - exact copy of original logic
+            let current = Object.keys(ElevationGradientRepeat)
+                .filter(key => ElevationGradientRepeat[key] === this.viewer.elevationGradientRepeat);
+            if (current.length > 0) {
+                gradientRepeat.find(`input[value=${current[0]}]`).trigger("click");
+            }
+        }
+        
+        // Initialize gradient scheme selection
+        this.initGradientSchemeSelection('elevation', material);
+    }
+    
+    /**
+     * Initialize extra attribute controls - CUSTOM implementation
+     */
+    initExtraControls(material, pointcloud) {
+        console.log(`Initializing extra attribute controls for viewer ${this.viewerId}`);
+        
+        // Extra Range
+        const sldExtraRange = this.dom.find(`#sldExtraRange_${this.viewerId}`);
+        const lblExtraRange = this.dom.find(`#lblExtraRange_${this.viewerId}`);
+        
+        if (sldExtraRange.length > 0) {
+            const extraRange = material.extraRange || [0, 1];
+            
+            sldExtraRange.slider({
+                range: true,
+                values: extraRange,
+                min: 0,
+                max: 1,
+                step: 0.01,
+                slide: (event, ui) => {
+                    const attributeName = material.activeAttributeName;
+                    if (attributeName) {
+                        material.setRange(attributeName, ui.values);
+                        lblExtraRange.html(`[${ui.values[0].toFixed(2)}, ${ui.values[1].toFixed(2)}]`);
+                    }
+                }
+            });
+            
+            lblExtraRange.html(`[${extraRange[0].toFixed(2)}, ${extraRange[1].toFixed(2)}]`);
+        }
+        
+        // Extra Gradient Repeat Option (using selectgroup - button group)
+        const extraGradientRepeat = this.dom.find(`#extra_gradient_repeat_option_${this.viewerId}`);
+        if (extraGradientRepeat.length > 0) {
+            extraGradientRepeat.selectgroup({title: "Gradient"});
+            
+            extraGradientRepeat.find("input").click((event) => {
+                event.stopPropagation();
+                const value = event.target.value;
+                
+                // CUSTOM - Exact copy of original logic
+                this.viewer.setElevationGradientRepeat(ElevationGradientRepeat[value]);
+                console.log(`Extra gradient repeat set to: ${value} (${ElevationGradientRepeat[value]}) for viewer ${this.viewerId}`);
+            });
+            
+            // Set initial state - exact copy of original logic
+            let current = Object.keys(ElevationGradientRepeat)
+                .filter(key => ElevationGradientRepeat[key] === this.viewer.elevationGradientRepeat);
+            if (current.length > 0) {
+                extraGradientRepeat.find(`input[value=${current[0]}]`).trigger("click");
+            }
+        }
+        
+        // Initialize gradient scheme selection
+        this.initGradientSchemeSelection('extra', material);
+    }
+    
+    /**
+     * Initialize matcap controls - CUSTOM implementation
+     */
+    initMatcapControls(material) {
+        console.log(`Initializing matcap controls for viewer ${this.viewerId}`);
+        
+        const matcapContainer = this.dom.find(`#matcap_scheme_selection_${this.viewerId}`);
+        
+        // Note: Full matcap implementation would require loading matcap textures
+        // This is a placeholder for the matcap selection UI
+        if (matcapContainer.length > 0) {
+            matcapContainer.html('<div>Matcap selection placeholder - requires matcap texture loading</div>');
+        }
+    }
+    
+    /**
+     * Initialize color controls - CUSTOM implementation
+     */
+    initColorControls(material) {
+        console.log(`Initializing color controls for viewer ${this.viewerId}`);
+        
+        const colorPicker = this.dom.find(`#materials_color_picker_${this.viewerId}`);
+        
+        if (colorPicker.length > 0) {
+            // Check if Spectrum color picker is available, otherwise fall back to basic HTML color input
+            if (typeof colorPicker.spectrum === 'function') {
+                // CUSTOM - Use Spectrum color picker like original Potree implementation
+                colorPicker.spectrum({
+                    flat: true,
+                    showInput: true,
+                    preferredFormat: 'rgb',
+                    cancelText: '',
+                    chooseText: 'Apply',
+                    color: material.color ? `#${material.color.getHexString()}` : '#ffffff',
+                    move: (color) => {
+                        const cRGB = color.toRgb();
+                        const tc = new THREE.Color().setRGB(cRGB.r / 255, cRGB.g / 255, cRGB.b / 255);
+                        material.color = tc;
+                        console.log(`Color changed (move) to: rgb(${cRGB.r}, ${cRGB.g}, ${cRGB.b}) for viewer ${this.viewerId}`);
+                    },
+                    change: (color) => {
+                        const cRGB = color.toRgb();
+                        const tc = new THREE.Color().setRGB(cRGB.r / 255, cRGB.g / 255, cRGB.b / 255);
+                        material.color = tc;
+                        console.log(`Color changed (final) to: rgb(${cRGB.r}, ${cRGB.g}, ${cRGB.b}) for viewer ${this.viewerId}`);
+                    }
+                });
+                
+                // Listen for material color changes to update picker
+                if (material.addEventListener) {
+                    material.addEventListener("color_changed", () => {
+                        colorPicker.spectrum('set', `#${material.color.getHexString()}`);
+                    });
+                }
+            } else {
+                // Fallback to basic HTML color input if Spectrum is not available
+                console.warn('Spectrum color picker not available, using basic HTML color input');
+                
+                // Set initial color
+                if (material.color && material.color.getHexString) {
+                    colorPicker.val(`#${material.color.getHexString()}`);
+                }
+                
+                colorPicker.on('change', (event) => {
+                    const colorValue = event.target.value;
+                    if (material.color && material.color.setHex) {
+                        material.color.setHex(colorValue.replace('#', '0x'));
+                        console.log(`Color changed to: ${colorValue} for viewer ${this.viewerId}`);
+                    }
+                });
+            }
+        } else {
+            console.warn(`Color picker element not found for viewer ${this.viewerId}`);
+        }
+    }
+    
+    /**
+     * Initialize gradient scheme selection for elevation or extra attributes - CUSTOM implementation
+     */
+    initGradientSchemeSelection(type, material) {
+        const container = this.dom.find(`#${type}_gradient_scheme_selection_${this.viewerId}`);
+        
+        if (container.length > 0) {
+            console.log(`Gradient scheme container found for ${type}, checking Potree.Gradients availability...`);
+            console.log(`window.Potree:`, !!window.Potree);
+            console.log(`window.Potree.Gradients:`, !!(window.Potree && window.Potree.Gradients));
+            console.log(`Utils:`, Utils);
+            console.log(`Utils.createSvgGradient:`, !!Utils.createSvgGradient);
+            
+            if (window.Potree && window.Potree.Gradients) {
+                // CUSTOM - Exact copy of original gradient scheme logic
+                const schemes = Object.keys(window.Potree.Gradients).map(name => ({
+                    name: name, 
+                    values: window.Potree.Gradients[name]
+                }));
+                
+                console.log(`Found ${schemes.length} gradient schemes:`, schemes.map(s => s.name));
+                
+                container.empty(); // Clear any existing content
+                
+                for (let scheme of schemes) {
+                    console.log(`Creating gradient ${scheme.name}:`, scheme.values);
+                    
+                    // Create scheme button - exact copy from original
+                    const elScheme = $(`
+                        <span style="flex-grow: 1; margin: 2px; border: 1px solid #ccc;">
+                        </span>
+                    `);
+                    
+                    try {
+                        // Use the exact same Utils.createSvgGradient method as original
+                        const svg = Utils.createSvgGradient(scheme.values);
+                        svg.setAttributeNS(null, "class", "button-icon");
+                        console.log(`SVG created successfully for ${scheme.name}:`, svg);
+                        
+                        elScheme.append($(svg));
+                    } catch (error) {
+                        console.error(`Error creating SVG for ${scheme.name}:`, error);
+                        // Fallback: create a simple colored div
+                        elScheme.append(`<div style="width: 64px; height: 16px; background: linear-gradient(to right, red, blue);">${scheme.name}</div>`);
+                    }
+                    
+                    // Add click handler to apply gradient - exact copy from original
+                    elScheme.click(() => {
+                        material.gradient = window.Potree.Gradients[scheme.name];
+                        console.log(`Applied gradient scheme '${scheme.name}' to ${type} for viewer ${this.viewerId}`);
+                    });
+                    
+                    container.append(elScheme);
+                }
+                
+                console.log(`Gradient scheme selection initialized for ${type} in viewer ${this.viewerId} with ${schemes.length} schemes`);
+            } else {
+                console.warn(`Potree.Gradients not available for ${type} in viewer ${this.viewerId}`);
+                console.warn(`window.Potree:`, window.Potree);
+                console.warn(`window.Potree.Gradients:`, window.Potree && window.Potree.Gradients);
+            }
+        } else {
+            console.warn(`Gradient scheme container not found for ${type} in viewer ${this.viewerId}`);
+        }
     }
     
     /**
@@ -2106,4 +2720,411 @@ export class MultiViewerSidebar {
             this.show();
         }
     }
+    
+    /**
+     * Initialize FILTERS section - COMPLETE implementation
+     * Replicates original sidebar.js filter methods for multi-viewer
+     */
+    initFilters() {
+        console.log(`Initializing FILTERS section for viewer ${this.viewerId}`);
+        
+        // Debug viewer state
+        console.log(`Viewer object exists:`, !!this.viewer);
+        console.log(`Viewer scene exists:`, !!this.viewer.scene);
+        console.log(`Viewer point clouds:`, this.viewer.scene ? this.viewer.scene.pointclouds.length : 'N/A');
+        
+        // Initialize basic structure (return filters that don't depend on point cloud data)
+        this.initReturnFilters();
+        this.initGPSTimeFilters();
+        
+        // Initialize classification list (may be empty until point cloud is loaded)
+        this.initClassificationList();
+        
+        // Set up event listener for when point clouds are added - CUSTOM
+        if (this.viewer.scene) {
+            this.viewer.scene.addEventListener("pointcloud_added", (e) => {
+                console.log(`Point cloud added for viewer ${this.viewerId}, updating filters`);
+                this.refreshFiltersForPointCloud();
+            });
+        }
+        
+        console.log(`FILTERS section initialized for viewer ${this.viewerId}`);
+    }
+    
+    /**
+     * Refresh filters when point cloud data is available - CUSTOM 
+     */
+    refreshFiltersForPointCloud() {
+        console.log(`Refreshing filters after point cloud loaded for viewer ${this.viewerId}`);
+        
+        // Re-initialize classification list now that data is available
+        this.initClassificationList();
+        
+        // Update any other filters that depend on point cloud data
+        // (Return filters and GPS time may have ranges from the actual data)
+        this.initReturnFilters();
+        this.initGPSTimeFilters();
+    }
+    
+    /**
+     * Initialize classification list with checkboxes and color pickers - CUSTOM implementation
+     */
+    initClassificationList() {
+        console.log(`Initializing classification list for viewer ${this.viewerId}`);
+        
+        // Debug DOM availability
+        console.log(`DOM element available:`, this.dom.length > 0);
+        console.log(`Looking for element:`, `#classificationList_${this.viewerId}`);
+        
+        const elClassificationList = this.dom.find(`#classificationList_${this.viewerId}`);
+        console.log(`Classification list found:`, elClassificationList.length > 0);
+        
+        if (elClassificationList.length === 0) {
+            console.warn(`Classification list container not found for viewer ${this.viewerId}`);
+            // Debug all available elements in filters section
+            const allFiltersElements = this.dom.find('[id*="classification"], [id*="Classification"]');
+            console.log(`Available classification-related elements:`, allFiltersElements.length, allFiltersElements.get().map(el => el.id));
+            return;
+        }
+        
+        // Debug viewer classifications
+        console.log(`Viewer classifications available:`, !!this.viewer.classifications);
+        console.log(`Classifications object:`, this.viewer.classifications);
+        const classKeys = this.viewer.classifications ? Object.keys(this.viewer.classifications) : [];
+        console.log(`Classification keys:`, classKeys);
+        console.log(`Number of classifications:`, classKeys.length);
+        
+        const addClassificationItem = (code, name) => {
+            console.log(`Adding classification item: ${code} - ${name}`);
+            const classification = this.viewer.classifications[code];
+            if (!classification) {
+                console.warn(`No classification found for code ${code}`);
+                return;
+            }
+            
+            const inputID = `chkClassification_${code}_${this.viewerId}`;
+            const colorPickerID = `colorPickerClassification_${code}_${this.viewerId}`;
+            
+            const checked = classification.visible ? "checked" : "";
+            console.log(`Classification ${code} visible:`, classification.visible);
+            
+            let element = $(`
+                <li>
+                    <label style="whitespace: nowrap; display: flex">
+                        <input id="${inputID}" type="checkbox" ${checked}/>
+                        <span style="flex-grow: 1; margin-left: 10px">${name}</span>
+                        <input id="${colorPickerID}" class="color-input" />
+                    </label>
+                </li>
+            `);
+            
+            let elInput = element.find(`#${inputID}`); // More specific - select by exact ID
+            let elColorPicker = element.find(`#${colorPickerID}`); // More specific - select by exact ID
+            
+            console.log(`Binding click event for classification ${code}, checkbox ID: ${inputID}`);
+            console.log(`Checkbox element found:`, elInput.length > 0);
+            
+            // Direct DOM event binding instead of jQuery to avoid event delegation issues - CUSTOM
+            const checkbox = elInput[0]; // Get the actual DOM element
+            if (checkbox) {
+                console.log(`Binding direct event to DOM element:`, checkbox.id);
+                checkbox.addEventListener('click', (event) => {
+                    console.log(`=== Classification ${code} clicked via direct DOM event ===`);
+                    console.log(`Event target ID:`, event.target.id);
+                    console.log(`Expected ID:`, inputID);
+                    console.log(`Checkbox state after click:`, event.target.checked);
+                    console.log(`Classification code from closure:`, code);
+                    
+                    // Update the viewer state
+                    this.viewer.setClassificationVisibility(code, event.target.checked);
+                    console.log(`Viewer classification ${code} visible after change:`, this.viewer.classifications[code].visible);
+                    
+                    // Force visual state to match the checkbox state (in case something overrides it)
+                    setTimeout(() => {
+                        const currentState = event.target.checked;
+                        const viewerState = this.viewer.classifications[code].visible;
+                        console.log(`Post-click sync check: checkbox=${currentState}, viewer=${viewerState}`);
+                        
+                        if (currentState !== viewerState) {
+                            console.log(`Forcing checkbox visual state to match viewer state: ${viewerState}`);
+                            event.target.checked = viewerState;
+                        }
+                    }, 10); // Small delay to let any other handlers run first
+                });
+            } else {
+                console.error(`Could not find checkbox DOM element for ${inputID}`);
+            }
+            
+            // Color picker setup
+            let defaultColor = classification.color.map(c => c * 255).join(", ");
+            defaultColor = `rgb(${defaultColor})`;
+            console.log(`Classification ${code} default color:`, defaultColor);
+            
+            if (typeof elColorPicker.spectrum === 'function') {
+                elColorPicker.spectrum({
+                    flat: false,
+                    showInput: true,
+                    color: defaultColor,
+                    preferredFormat: 'rgb',
+                    cancelText: '',
+                    chooseText: 'Apply',
+                    move: color => {
+                        let rgb = color.toRgb();
+                        const c = [rgb.r / 255, rgb.g / 255, rgb.b / 255, 1];
+                        classification.color = c;
+                    },
+                    change: color => {
+                        let rgb = color.toRgb();
+                        const c = [rgb.r / 255, rgb.g / 255, rgb.b / 255, 1];
+                        classification.color = c;
+                    }
+                });
+            } else {
+                // Fallback to basic color input if Spectrum not available
+                elColorPicker.attr('type', 'color');
+                elColorPicker.val(rgbToHex(defaultColor));
+                elColorPicker.on('change', (event) => {
+                    const hex = event.target.value;
+                    const rgb = hexToRgb(hex);
+                    const c = [rgb.r / 255, rgb.g / 255, rgb.b / 255, 1];
+                    classification.color = c;
+                });
+            }
+            
+            elClassificationList.append(element);
+            console.log(`Classification item ${code} added to DOM at position:`, elClassificationList.children().length);
+            
+            // Verify the element was added correctly
+            const verifyElement = elClassificationList.find(`#${inputID}`);
+            console.log(`Verification: Can find checkbox ${inputID}:`, verifyElement.length > 0);
+        };
+        
+        const addToggleAllButton = () => {
+            let element = $(`
+                <li>
+                    <label style="whitespace: nowrap">
+                        <input id="chkToggleClassifications_${this.viewerId}" type="checkbox" checked/>
+                        <span>show/hide all</span>
+                    </label>
+                </li>
+            `);
+            
+            let elInput = element.find('input');
+            
+            elInput.click(event => {
+                console.log(`Toggle all classifications clicked for viewer ${this.viewerId}`);
+                event.stopPropagation(); // Prevent ViewerManager interference
+                this.viewer.toggleAllClassificationsVisibility();
+            });
+            
+            elClassificationList.append(element);
+        };
+        
+        const addInvertButton = () => {
+            let element = $(`
+                <li>
+                    <input type="button" value="invert" style="width: 100%; margin: 5px 0px"/>
+                </li>
+            `);
+            
+            let elInput = element.find('input');
+            
+            elInput.click(event => {
+                console.log(`Invert classifications clicked for viewer ${this.viewerId}`);
+                event.stopPropagation(); // Prevent ViewerManager interference
+                const classifications = this.viewer.classifications;
+                
+                for (let key of Object.keys(classifications)) {
+                    let value = classifications[key];
+                    this.viewer.setClassificationVisibility(key, !value.visible);
+                }
+            });
+            
+            elClassificationList.append(element);
+        };
+        
+        const populate = () => {
+            console.log(`Populating classification list for viewer ${this.viewerId}`);
+            
+            // Clear existing content
+            elClassificationList.empty();
+            console.log(`Classification list cleared`);
+            
+            addToggleAllButton();
+            console.log(`Toggle all button added`);
+            
+            const classKeys = Object.keys(this.viewer.classifications || {});
+            console.log(`About to iterate over ${classKeys.length} classifications:`, classKeys);
+            
+            // Sort classification keys to ensure consistent ordering
+            const sortedClassKeys = Object.keys(this.viewer.classifications).sort((a, b) => parseInt(a) - parseInt(b));
+            console.log(`Sorted classification keys:`, sortedClassKeys);
+            
+            for (let classID of sortedClassKeys) {
+                console.log(`Processing classification ID: ${classID}, name: ${this.viewer.classifications[classID].name}`);
+                addClassificationItem(classID, this.viewer.classifications[classID].name);
+            }
+            
+            addInvertButton();
+            console.log(`Invert button added`);
+            console.log(`Classification population complete`);
+        };
+        
+        populate();
+        
+        // Event listeners for classification changes
+        this.viewer.addEventListener("classifications_changed", () => {
+            elClassificationList.empty();
+            populate();
+        });
+        
+        this.viewer.addEventListener("classification_visibility_changed", () => {
+            console.log(`Classification visibility changed event triggered for viewer ${this.viewerId}`);
+            
+            // Re-enable automatic state updates but with better debugging
+            for (const classID of Object.keys(this.viewer.classifications)) {
+                const classValue = this.viewer.classifications[classID];
+                let elItem = elClassificationList.find(`#chkClassification_${classID}_${this.viewerId}`);
+                if (elItem.length > 0) {
+                    const currentVisualState = elItem.prop("checked");
+                    const shouldBeState = classValue.visible;
+                    console.log(`Sync classification ${classID}: visual=${currentVisualState}, should be=${shouldBeState}`);
+                    
+                    if (currentVisualState !== shouldBeState) {
+                        elItem.prop("checked", shouldBeState);
+                        console.log(`Updated visual state for classification ${classID} to ${shouldBeState}`);
+                    }
+                } else {
+                    console.warn(`Could not find checkbox for classification ${classID}`);
+                }
+            }
+            
+            // Update toggle button state
+            let numVisible = 0;
+            let numItems = 0;
+            for (const key of Object.keys(this.viewer.classifications)) {
+                if (this.viewer.classifications[key].visible) {
+                    numVisible++;
+                }
+                numItems++;
+            }
+            const allVisible = numVisible === numItems;
+            let elToggle = elClassificationList.find(`#chkToggleClassifications_${this.viewerId}`);
+            elToggle.prop("checked", allVisible);
+        });
+    }
+    
+    /**
+     * Initialize return filters (return number and number of returns) - CUSTOM implementation
+     */
+    initReturnFilters() {
+        console.log(`Initializing return filters for viewer ${this.viewerId}`);
+        
+        // Debug DOM availability
+        console.log(`Looking for return_filter_panel_${this.viewerId}`);
+        const elReturnFilterPanel = this.dom.find(`#return_filter_panel_${this.viewerId}`);
+        console.log(`Return filter panel found:`, elReturnFilterPanel.length > 0);
+        
+        if (elReturnFilterPanel.length === 0) {
+            console.warn(`Return filter panel not found for viewer ${this.viewerId}`);
+            // Debug available elements
+            const returnElements = this.dom.find('[id*="return"], [id*="Return"]');
+            console.log(`Available return-related elements:`, returnElements.length, returnElements.get().map(el => el.id));
+            return;
+        }
+        
+        // RETURN NUMBER
+        const sldReturnNumber = elReturnFilterPanel.find(`#sldReturnNumber_${this.viewerId}`);
+        const lblReturnNumber = elReturnFilterPanel.find(`#lblReturnNumber_${this.viewerId}`);
+        
+        if (sldReturnNumber.length > 0) {
+            sldReturnNumber.slider({
+                range: true,
+                min: 0, max: 7, step: 1,
+                values: [0, 7],
+                slide: (event, ui) => {
+                    this.viewer.setFilterReturnNumberRange(ui.values[0], ui.values[1]);
+                }
+            });
+            
+            const onReturnNumberChanged = (event) => {
+                let [from, to] = this.viewer.filterReturnNumberRange;
+                lblReturnNumber.html(`${from} to ${to}`);
+                sldReturnNumber.slider({values: [from, to]});
+            };
+            
+            this.viewer.addEventListener('filter_return_number_range_changed', onReturnNumberChanged);
+            onReturnNumberChanged();
+        }
+        
+        // NUMBER OF RETURNS
+        const sldNumberOfReturns = elReturnFilterPanel.find(`#sldNumberOfReturns_${this.viewerId}`);
+        const lblNumberOfReturns = elReturnFilterPanel.find(`#lblNumberOfReturns_${this.viewerId}`);
+        
+        if (sldNumberOfReturns.length > 0) {
+            sldNumberOfReturns.slider({
+                range: true,
+                min: 0, max: 7, step: 1,
+                values: [0, 7],
+                slide: (event, ui) => {
+                    this.viewer.setFilterNumberOfReturnsRange(ui.values[0], ui.values[1]);
+                }
+            });
+            
+            const onNumberOfReturnsChanged = (event) => {
+                let [from, to] = this.viewer.filterNumberOfReturnsRange;
+                lblNumberOfReturns.html(`${from} to ${to}`);
+                sldNumberOfReturns.slider({values: [from, to]});
+            };
+            
+            this.viewer.addEventListener('filter_number_of_returns_range_changed', onNumberOfReturnsChanged);
+            onNumberOfReturnsChanged();
+        }
+    }
+    
+    
+    /**
+     * Initialize GPS time filters - CUSTOM implementation
+     */
+    initGPSTimeFilters() {
+        console.log(`Initializing GPS time filters for viewer ${this.viewerId}`);
+        
+        const elGPSTimeFilterPanel = this.dom.find(`#gpstime_filter_panel_${this.viewerId}`);
+        
+        if (elGPSTimeFilterPanel.length === 0) {
+            console.warn(`GPS time filter panel not found for viewer ${this.viewerId}`);
+            return;
+        }
+        
+        // Basic GPS time input functionality
+        const txtGpsTime = elGPSTimeFilterPanel.find(`#txtGpsTime_${this.viewerId}`);
+        const btnFindGpsTime = elGPSTimeFilterPanel.find(`#btnFindGpsTime_${this.viewerId}`);
+        
+        if (btnFindGpsTime.length > 0) {
+            btnFindGpsTime.click(() => {
+                const timeValue = txtGpsTime.val();
+                if (timeValue && this.viewer.setFilterGPSTime) {
+                    this.viewer.setFilterGPSTime(parseFloat(timeValue));
+                    console.log(`GPS time filter set to: ${timeValue} for viewer ${this.viewerId}`);
+                }
+            });
+        }
+        
+        console.log(`GPS time filters initialized for viewer ${this.viewerId}`);
+    }
+}
+
+// Helper functions for color conversion
+function rgbToHex(rgb) {
+    const result = rgb.match(/\d+/g);
+    return result ? "#" + ((1 << 24) + (parseInt(result[0]) << 16) + (parseInt(result[1]) << 8) + parseInt(result[2])).toString(16).slice(1) : "#ffffff";
+}
+
+function hexToRgb(hex) {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16)
+    } : { r: 255, g: 255, b: 255 };
 }
