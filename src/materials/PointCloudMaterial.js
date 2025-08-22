@@ -1099,4 +1099,161 @@ export class PointCloudMaterial extends THREE.RawShaderMaterial {
 	// 	this.copyFrom(from);
 	// }
 
+	/**
+	 * Create a deep clone of this PointCloudMaterial for per-viewer customization - CUSTOM
+	 * Clones viewer-specific properties while sharing heavy resources (textures, shaders)
+	 */
+	clone() {
+		console.log(`Cloning PointCloudMaterial with activeAttribute: ${this._activeAttributeName}`);
+		console.log(`Original textures - gradient: ${!!this.gradientTexture}, visible: ${!!this.visibleNodesTexture}, classification: ${!!this.classificationTexture}`);
+		
+		// Create new material with same constructor parameters
+		const cloned = new PointCloudMaterial({
+			size: this.uniforms.size.value,
+			minSize: this.uniforms.minSize.value,
+			maxSize: this.uniforms.maxSize.value,
+			treeType: this._treeType
+		});
+		
+		// === CLONE: Viewer-specific uniforms (values that should differ per viewer) ===
+		// Size and display properties
+		cloned.uniforms.size.value = this.uniforms.size.value;
+		cloned.uniforms.minSize.value = this.uniforms.minSize.value;
+		cloned.uniforms.maxSize.value = this.uniforms.maxSize.value;
+		cloned.uniforms.uOpacity.value = this.uniforms.uOpacity.value;
+		cloned.uniforms.uColor.value.copy(this.uniforms.uColor.value);
+		
+		// Weight properties (RGB, Intensity, Elevation, etc.)
+		cloned.uniforms.wRGB.value = this.uniforms.wRGB.value;
+		cloned.uniforms.wIntensity.value = this.uniforms.wIntensity.value;
+		cloned.uniforms.wElevation.value = this.uniforms.wElevation.value;
+		cloned.uniforms.wClassification.value = this.uniforms.wClassification.value;
+		cloned.uniforms.wReturnNumber.value = this.uniforms.wReturnNumber.value;
+		cloned.uniforms.wSourceID.value = this.uniforms.wSourceID.value;
+		
+		// Range properties
+		cloned.uniforms.intensityRange.value = [...this.uniforms.intensityRange.value];
+		cloned.uniforms.elevationRange.value = [...this.uniforms.elevationRange.value];
+		
+		// Filter ranges
+		cloned.uniforms.uFilterReturnNumberRange.value = [...this.uniforms.uFilterReturnNumberRange.value];
+		cloned.uniforms.uFilterNumberOfReturnsRange.value = [...this.uniforms.uFilterNumberOfReturnsRange.value];
+		cloned.uniforms.uFilterGPSTimeClipRange.value = [...this.uniforms.uFilterGPSTimeClipRange.value];
+		cloned.uniforms.uFilterPointSourceIDClipRange.value = [...this.uniforms.uFilterPointSourceIDClipRange.value];
+		
+		// Gamma, brightness, contrast controls
+		cloned.uniforms.intensity_gbc.value = [...this.uniforms.intensity_gbc.value];
+		cloned.uniforms.uRGB_gbc.value = [...this.uniforms.uRGB_gbc.value];
+		
+		// === CLONE: Viewer-specific properties ===
+		cloned._activeAttributeName = this._activeAttributeName;
+		cloned._pointSizeType = this._pointSizeType;
+		cloned._shape = this._shape;
+		cloned._gradient = this._gradient;
+		cloned._matcap = this._matcap;
+		cloned._useClipBox = this._useClipBox;
+		cloned._weighted = this._weighted;
+		cloned._useEDL = this._useEDL;
+		
+		// Classification (may need individual instances for per-viewer settings)
+		cloned.classification = { ...this.classification }; // Shallow copy for now
+		
+		// Copy defines (shader preprocessor definitions)
+		cloned.defines = new Map(this.defines);
+		
+		// Copy ranges map
+		cloned.ranges = new Map(this.ranges);
+		
+		// === SHARE: Heavy resources (textures, shaders, geometry) ===
+		// These are expensive to clone and can be safely shared
+		cloned.visibleNodesTexture = this.visibleNodesTexture; // Share visible nodes texture
+		cloned.gradientTexture = this.gradientTexture; // Share gradient texture
+		cloned.classificationTexture = this.classificationTexture; // Share classification texture
+		cloned.matcapTexture = this.matcapTexture; // Share matcap texture
+		
+		// Update uniforms to reference the shared textures - CUSTOM fix for rendering issue
+		cloned.uniforms.visibleNodes.value = this.visibleNodesTexture;
+		cloned.uniforms.gradient.value = this.gradientTexture;
+		cloned.uniforms.classificationLUT.value = this.classificationTexture;
+		cloned.uniforms.matcapTextureUniform.value = this.matcapTexture;
+		
+		// Share geometry attributes (point cloud data)
+		cloned.attributes = this.attributes; // Share geometry data
+		
+		// Share shader code (no benefit to clone)
+		cloned.vertexShader = this.vertexShader;
+		cloned.fragmentShader = this.fragmentShader;
+		
+		// Update shader source to reflect cloned properties
+		cloned.updateShaderSource();
+		
+		console.log(`Material cloned successfully. Original activeAttribute: ${this._activeAttributeName}, Cloned: ${cloned._activeAttributeName}`);
+		console.log(`Cloned textures - gradient: ${!!cloned.gradientTexture}, visible: ${!!cloned.visibleNodesTexture}, classification: ${!!cloned.classificationTexture}`);
+		console.log(`Cloned uniforms - gradient: ${!!cloned.uniforms.gradient.value}, visible: ${!!cloned.uniforms.visibleNodes.value}`);
+		
+		return cloned;
+	}
+	
+	/**
+	 * Test method to verify material cloning works correctly - CUSTOM
+	 * Returns a comprehensive report of cloning success/failure
+	 */
+	testClone() {
+		console.log('=== TESTING POINTCLOUD MATERIAL CLONING ===');
+		
+		const results = {
+			passed: 0,
+			failed: 0,
+			tests: []
+		};
+		
+		const addTest = (name, condition, details = '') => {
+			const passed = !!condition;
+			results.tests.push({ name, passed, details });
+			if (passed) results.passed++; else results.failed++;
+			console.log(`${passed ? '✅' : '❌'} ${name}${details ? ': ' + details : ''}`);
+		};
+		
+		// Create clone for testing
+		this.size = 5.0; // Set original to known value
+		this.opacity = 0.8;
+		this._activeAttributeName = 'intensity';
+		
+		const clone = this.clone();
+		
+		// Test 1: Different instances
+		addTest('Different instances', this !== clone, 'Original and clone are separate objects');
+		
+		// Test 2: Viewer-specific properties cloned correctly
+		addTest('Size cloned correctly', this.size === clone.size && this.size === 5.0, `Original: ${this.size}, Clone: ${clone.size}`);
+		addTest('Opacity cloned correctly', this.opacity === clone.opacity && this.opacity === 0.8, `Original: ${this.opacity}, Clone: ${clone.opacity}`);
+		addTest('ActiveAttribute cloned', this._activeAttributeName === clone._activeAttributeName, `Both: ${this._activeAttributeName}`);
+		
+		// Test 3: Independent modification
+		this.size = 10.0;
+		clone.size = 15.0;
+		addTest('Independent size modification', this.size === 10.0 && clone.size === 15.0, `Original: ${this.size}, Clone: ${clone.size}`);
+		
+		this.opacity = 0.5;
+		clone.opacity = 0.9;
+		addTest('Independent opacity modification', this.opacity === 0.5 && clone.opacity === 0.9, `Original: ${this.opacity}, Clone: ${clone.opacity}`);
+		
+		// Test 4: Shared resources
+		addTest('Textures shared correctly', this.visibleNodesTexture === clone.visibleNodesTexture, 'Same texture reference');
+		addTest('Shaders shared correctly', this.vertexShader === clone.vertexShader, 'Same shader code');
+		addTest('Geometry shared correctly', this.attributes === clone.attributes, 'Same geometry data');
+		
+		// Test 5: Uniforms independence
+		this.uniforms.wRGB.value = 0.3;
+		clone.uniforms.wRGB.value = 0.7;
+		addTest('Independent uniform values', this.uniforms.wRGB.value === 0.3 && clone.uniforms.wRGB.value === 0.7, `Original wRGB: ${this.uniforms.wRGB.value}, Clone: ${clone.uniforms.wRGB.value}`);
+		
+		console.log(`\n=== CLONING TEST RESULTS ===`);
+		console.log(`✅ Passed: ${results.passed}`);
+		console.log(`❌ Failed: ${results.failed}`);
+		console.log(`📊 Success Rate: ${Math.round((results.passed / (results.passed + results.failed)) * 100)}%`);
+		
+		return results;
+	}
+
 }

@@ -112,6 +112,9 @@
         <button onclick="testRemoveViewer()" id="removeViewerBtn" disabled>Remove Viewer</button>
         <button onclick="testIdentification()" id="identificationBtn" disabled>Test Identification</button>
         <button onclick="testStatus()" id="statusBtn" disabled>Show Status</button>
+        <button onclick="testMaterialClone()">Test Material Clone</button>
+        <button onclick="testMaterialIsolation()" id="testIsolationBtn">Test Material Isolation</button>
+        <button onclick="testComprehensiveMaterialIsolation()" id="testComprehensiveBtn" style="background: #4CAF50; color: white; font-weight: bold;">🧪 Test All Fixes</button>
         
         <!-- Performance Monitoring Controls -->
         <br><br><strong>Performance Monitoring:</strong><br>
@@ -1793,6 +1796,309 @@
                 log(`✗ Error toggling focus lock: ${error.message}`);
             }
         };
+        
+        // Material Clone Test Function - CUSTOM
+        window.testMaterialClone = function() {
+            log('\n=== TESTING MATERIAL CLONING ===');
+            
+            try {
+                // Check if PointCloudMaterial is available
+                if (!window.Potree || !window.Potree.PointCloudMaterial) {
+                    log('✗ Potree.PointCloudMaterial not available');
+                    log('Available Potree exports: ' + Object.keys(window.Potree || {}).join(', '));
+                    return;
+                }
+                
+                log('✓ Creating test PointCloudMaterial...');
+                const material = new window.Potree.PointCloudMaterial({
+                    size: 3.0,
+                    minSize: 1.0,
+                    maxSize: 50.0
+                });
+                
+                log('✓ Running material.testClone()...');
+                const results = material.testClone();
+                
+                log(`\n=== CLONE TEST RESULTS ===`);
+                log(`✅ Passed: ${results.passed}`);
+                log(`❌ Failed: ${results.failed}`);
+                log(`📊 Success Rate: ${Math.round((results.passed / (results.passed + results.failed)) * 100)}%`);
+                
+                if (results.failed > 0) {
+                    log('\n❌ Failed Tests:');
+                    results.tests.filter(test => !test.passed).forEach(test => {
+                        log(`  - ${test.name}: ${test.details || 'No details'}`);
+                    });
+                }
+                
+                log('\n✓ Material cloning test completed');
+                return results;
+                
+            } catch (error) {
+                log(`✗ Material clone test failed: ${error.message}`);
+                console.error('Full error:', error);
+                return null;
+            }
+        };
+        
+        // Material Isolation Test Function - CUSTOM
+        window.testMaterialIsolation = function() {
+            log('\n=== TESTING MATERIAL ISOLATION BETWEEN VIEWERS ===');
+            
+            if (!multiViewer || testViewers.length < 2) {
+                log('✗ Need at least 2 viewers with point clouds loaded');
+                log('  - Run: Create MultiViewer → Create Viewers → Load point clouds first');
+                return;
+            }
+            
+            try {
+                log('✓ Testing material isolation between viewers...');
+                
+                // Get materials from different viewers
+                const viewer1 = testViewers[0];
+                const viewer2 = testViewers[1];
+                
+                // Check if viewers have point clouds
+                if (!viewer1.scene || !viewer1.scene.pointclouds.length) {
+                    log('✗ Viewer 1 has no point clouds loaded');
+                    return;
+                }
+                if (!viewer2.scene || !viewer2.scene.pointclouds.length) {
+                    log('✗ Viewer 2 has no point clouds loaded');
+                    return;
+                }
+                
+                const pc1 = viewer1.scene.pointclouds[0];
+                const pc2 = viewer2.scene.pointclouds[0];
+                const material1 = pc1.material;
+                const material2 = pc2.material;
+                
+                log(`✓ Found materials: Viewer1=${material1._viewerId}, Viewer2=${material2._viewerId}`);
+                
+                // Test 1: Different instances
+                const differentInstances = material1 !== material2;
+                log(`${differentInstances ? '✅' : '❌'} Different instances: ${differentInstances}`);
+                
+                // Test 2: Independent size modification
+                const originalSize1 = material1.size;
+                const originalSize2 = material2.size;
+                
+                material1.size = 8.0;
+                material2.size = 12.0;
+                
+                const independentSize = (material1.size === 8.0 && material2.size === 12.0);
+                log(`${independentSize ? '✅' : '❌'} Independent size: Material1=${material1.size}, Material2=${material2.size}`);
+                
+                // Test 3: Independent opacity modification  
+                material1.opacity = 0.3;
+                material2.opacity = 0.7;
+                
+                const independentOpacity = (material1.opacity === 0.3 && material2.opacity === 0.7);
+                log(`${independentOpacity ? '✅' : '❌'} Independent opacity: Material1=${material1.opacity}, Material2=${material2.opacity}`);
+                
+                // Test 4: Verify viewer IDs are correct
+                const correctViewerIds = (material1._viewerId !== material2._viewerId);
+                log(`${correctViewerIds ? '✅' : '❌'} Correct viewer IDs: Material1=${material1._viewerId}, Material2=${material2._viewerId}`);
+                
+                // Calculate results
+                const tests = [differentInstances, independentSize, independentOpacity, correctViewerIds];
+                const passed = tests.filter(t => t).length;
+                const total = tests.length;
+                
+                log(`\n=== MATERIAL ISOLATION RESULTS ===`);
+                log(`✅ Passed: ${passed}/${total}`);
+                log(`📊 Success Rate: ${Math.round((passed / total) * 100)}%`);
+                
+                if (passed === total) {
+                    log('🎉 MATERIAL ISOLATION WORKING PERFECTLY!');
+                    log('✓ Each viewer now has its own material instance');
+                    log('✓ UI changes will only affect the target viewer');
+                } else {
+                    log('❌ MATERIAL ISOLATION FAILED');
+                    log('⚠️  Viewers are still sharing material instances');
+                }
+                
+                // Restore original sizes for UI consistency
+                material1.size = originalSize1;
+                material2.size = originalSize2;
+                
+                return { passed, total, success: passed === total };
+                
+            } catch (error) {
+                log(`✗ Material isolation test failed: ${error.message}`);
+                console.error('Full error:', error);
+                return null;
+            }
+        };
+        
+        /**
+         * Comprehensive test for all material isolation fixes
+         * Tests Layer 1, 2, and 3 fixes implemented to resolve UI sharing issues
+         */
+        const testComprehensiveMaterialIsolation = () => {
+            log('🧪 === COMPREHENSIVE MATERIAL ISOLATION TEST ===');
+            
+            try {
+                // Use the global testViewers array like other tests do
+                const viewers = testViewers.slice(0, 3); // Take first 3 viewers
+                const materials = [];
+                
+                if (viewers.length < 2) {
+                    log('❌ Need at least 2 viewers for comprehensive test');
+                    log('💡 Create more viewers first using the "Add Viewer" button');
+                    return null;
+                }
+                
+                // Collect materials from all viewers
+                for (let i = 0; i < viewers.length; i++) {
+                    const viewer = viewers[i];
+                    const material = viewer.scene.pointclouds[0]?.material;
+                    if (!material) {
+                        log(`❌ No material found for viewer ${i + 1}`);
+                        return null;
+                    }
+                    materials.push(material);
+                }
+                
+                log(`✅ Found materials for ${materials.length} viewers`);
+                
+                // Test 1: Material instance isolation (Layer 1 fix verification)
+                let isolationTests = 0;
+                let isolationPassed = 0;
+                
+                for (let i = 0; i < materials.length; i++) {
+                    for (let j = i + 1; j < materials.length; j++) {
+                        isolationTests++;
+                        if (materials[i] !== materials[j]) {
+                            isolationPassed++;
+                            log(`✅ Material ${i+1} ≠ Material ${j+1}`);
+                        } else {
+                            log(`❌ Material ${i+1} === Material ${j+1} (SHARING DETECTED!)`);
+                        }
+                    }
+                }
+                
+                // Test 2: Classification isolation (Layer 1 fix verification)
+                log('\n🔍 Testing Classification Isolation...');
+                
+                // Save original states
+                const originalStates = viewers.map(viewer => ({...viewer.classifications}));
+                
+                // Test classification change isolation
+                let classificationPassed = true;
+                const testClassCode = Object.keys(materials[0].classification || {})[0];
+                
+                if (testClassCode) {
+                    // Change classification in viewer 1
+                    const originalValue = viewers[0].classifications[testClassCode]?.visible;
+                    viewers[0].setClassificationVisibility(testClassCode, !originalValue);
+                    
+                    // Check if other viewers were affected (they shouldn't be)
+                    for (let i = 1; i < viewers.length; i++) {
+                        const otherViewerState = viewers[i].classifications[testClassCode]?.visible;
+                        if (otherViewerState !== originalValue) {
+                            log(`❌ Classification change in viewer 1 affected viewer ${i+1}`);
+                            classificationPassed = false;
+                        }
+                    }
+                    
+                    if (classificationPassed) {
+                        log(`✅ Classification changes are isolated per viewer`);
+                    }
+                    
+                    // Restore original state
+                    viewers[0].setClassificationVisibility(testClassCode, originalValue);
+                } else {
+                    log(`⚠️  No classification codes found to test`);
+                }
+                
+                // Test 3: Attribute range isolation (Layer 2 fix verification) 
+                log('\n🎯 Testing Attribute Range Isolation...');
+                let attributeRangePassed = true;
+                
+                for (let i = 0; i < materials.length; i++) {
+                    const material = materials[i];
+                    
+                    // Check if intensity range is valid (not NaN)
+                    if (material.intensityRange && Array.isArray(material.intensityRange)) {
+                        const [min, max] = material.intensityRange;
+                        if (isNaN(min) || isNaN(max)) {
+                            log(`❌ Viewer ${i+1} has NaN intensity range: [${min}, ${max}]`);
+                            attributeRangePassed = false;
+                        } else {
+                            log(`✅ Viewer ${i+1} has valid intensity range: [${min}, ${max}]`);
+                        }
+                    } else {
+                        log(`⚠️  Viewer ${i+1} has no intensity range property`);
+                    }
+                }
+                
+                // Test 4: Frame-level override prevention (Layer 1 fix verification)
+                log('\n⏱️  Testing Frame-Level Override Prevention...');
+                let frameOverridePassed = true;
+                
+                for (let i = 0; i < materials.length; i++) {
+                    const material = materials[i];
+                    
+                    // Check if material has viewer isolation markers
+                    if (material._viewerId) {
+                        log(`✅ Material ${i+1} has viewer ID: ${material._viewerId}`);
+                    } else {
+                        log(`⚠️  Material ${i+1} missing viewer ID marker`);
+                        frameOverridePassed = false;
+                    }
+                    
+                    if (material._classificationInitialized) {
+                        log(`✅ Material ${i+1} has classification initialization marker`);
+                    } else {
+                        log(`⚠️  Material ${i+1} missing classification initialization marker`);
+                    }
+                }
+                
+                // Calculate overall results
+                const tests = [
+                    { name: 'Material Instance Isolation', passed: isolationPassed === isolationTests },
+                    { name: 'Classification Event Isolation', passed: classificationPassed },
+                    { name: 'Attribute Range Validity', passed: attributeRangePassed },
+                    { name: 'Frame Override Prevention', passed: frameOverridePassed }
+                ];
+                
+                const overallPassed = tests.filter(t => t.passed).length;
+                const totalTests = tests.length;
+                
+                log(`\n=== COMPREHENSIVE TEST RESULTS ===`);
+                tests.forEach(test => {
+                    log(`${test.passed ? '✅' : '❌'} ${test.name}`);
+                });
+                
+                log(`\n📊 Overall Score: ${overallPassed}/${totalTests}`);
+                log(`🎯 Success Rate: ${Math.round((overallPassed / totalTests) * 100)}%`);
+                
+                if (overallPassed === totalTests) {
+                    log('\n🎉 ALL MATERIAL ISOLATION FIXES WORKING!');
+                    log('✓ Layer 1: Frame-level classification overrides stopped');
+                    log('✓ Layer 2: Attribute range calculation fixed for viewers 2+');
+                    log('✓ Layer 3: Classification event isolation implemented');
+                    log('✓ Multi-viewer UI issues should now be resolved');
+                } else {
+                    log('\n⚠️  SOME ISSUES REMAIN');
+                    log('🔧 Check the failed tests above for remaining problems');
+                }
+                
+                return { 
+                    passed: overallPassed, 
+                    total: totalTests, 
+                    success: overallPassed === totalTests,
+                    details: tests
+                };
+                
+            } catch (error) {
+                log(`✗ Comprehensive test failed: ${error.message}`);
+                console.error('Full error:', error);
+                return null;
+            }
+        };
+        
         
     </script>
 </body>

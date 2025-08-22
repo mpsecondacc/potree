@@ -221,25 +221,25 @@ export class SharedResourceManager extends EventDispatcher {
     createViewerMaterial(sharedPC, viewerId) {
         const originalMaterial = sharedPC.originalMaterial;
         
-        // Instead of cloning which may cause texture issues, create a reference to the original material
-        // Point cloud materials are typically shared and shouldn't need individual instances
-        // unless we need per-viewer customization
-        const viewerMaterial = originalMaterial;
+        // Clone the material for per-viewer customization - CUSTOM
+        // Each viewer now gets its own material instance to prevent cross-contamination
+        console.log(`Creating cloned material for viewer ${viewerId}`);
+        const viewerMaterial = originalMaterial.clone();
         
-        // Add viewer identification without modifying the original
+        // Add viewer identification to the cloned material - CUSTOM
         const materialWrapper = {
-            // Delegate all properties and methods to original material
-            ...originalMaterial,
+            // Delegate all properties and methods to cloned material (not original)
+            ...viewerMaterial,
             
             // Override specific properties if needed for viewer identification
             _viewerId: viewerId,
             _sharedResourceId: sharedPC.id,
             _isSharedResource: true,
-            _originalMaterial: originalMaterial
+            _originalMaterial: originalMaterial // Keep reference to original for debugging
         };
         
-        // Create a proxy to ensure all material methods work correctly
-        return new Proxy(originalMaterial, {
+        // Create a proxy to ensure all material methods work correctly with the cloned material
+        return new Proxy(viewerMaterial, {
             get(target, prop) {
                 // Return viewer-specific properties if they exist
                 if (prop === '_viewerId') return viewerId;

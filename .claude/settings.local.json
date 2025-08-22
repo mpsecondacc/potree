@@ -18,7 +18,9 @@
       "Bash(git checkout:*)",
       "Bash(mv:*)",
       "WebSearch",
-      "Bash(start http://localhost:1234/examples/test-multi-viewer-NEW.html)"
+      "Bash(start http://localhost:1234/examples/test-multi-viewer-NEW.html)",
+      "Bash(move test-material-clone.html 0_TESTS)",
+      "Bash(start http://localhost:1234/0_TESTS/test-material-clone.html)"
     ],
     "deny": [],
     "ask": [],

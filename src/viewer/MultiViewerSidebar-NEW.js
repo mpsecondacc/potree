@@ -2219,10 +2219,8 @@ export class MultiViewerSidebar {
     initIntensityControls(material, pointcloud) {
         console.log(`Initializing intensity controls for viewer ${this.viewerId}`);
         
-        // Get intensity attribute from point cloud
-        const intensityAttribute = pointcloud.getAttribute ? pointcloud.getAttribute('intensity') : null;
-        
-        // Intensity Range
+        // CUSTOM - Get intensity range from viewer-specific material instead of shared geometry
+        // This prevents NaN issues when multiple viewers use different attributes
         const sldIntensityRange = this.dom.find(`#sldIntensityRange_${this.viewerId}`);
         const lblIntensityRange = this.dom.find(`#lblIntensityRange_${this.viewerId}`);
         
@@ -2230,9 +2228,19 @@ export class MultiViewerSidebar {
             let attributeMin = 0;
             let attributeMax = 65535;
             
-            // Get intensity range from attribute if available
-            if (intensityAttribute && intensityAttribute.range) {
-                [attributeMin, attributeMax] = intensityAttribute.range;
+            // Try to get range from material uniforms first (viewer-specific)
+            if (material.uniforms && material.uniforms.intensityRange && material.uniforms.intensityRange.value) {
+                [attributeMin, attributeMax] = material.uniforms.intensityRange.value;
+            } else if (material.intensityRange && Array.isArray(material.intensityRange)) {
+                // Fallback to material property
+                [attributeMin, attributeMax] = material.intensityRange;
+            } else {
+                // Last resort: try to get from shared geometry (but log warning)
+                const intensityAttribute = pointcloud.getAttribute ? pointcloud.getAttribute('intensity') : null;
+                if (intensityAttribute && intensityAttribute.range) {
+                    [attributeMin, attributeMax] = intensityAttribute.range;
+                    console.warn(`Viewer ${this.viewerId}: Using shared geometry for intensity range - this may cause NaN issues`);
+                }
             }
             
             // Initialize material intensity range if needed or invalid
@@ -2244,8 +2252,24 @@ export class MultiViewerSidebar {
                 material.intensityRange = [attributeMin, attributeMax];
             }
             
+            // CUSTOM - Add validation and debugging for NaN issues
             console.log(`Intensity attribute range: [${attributeMin}, ${attributeMax}]`);
             console.log(`Material intensity range: [${material.intensityRange[0]}, ${material.intensityRange[1]}]`);
+            
+            // Validate final range values before using them
+            if (isNaN(attributeMin) || isNaN(attributeMax) || attributeMin >= attributeMax) {
+                console.error(`❌ Invalid attribute range for viewer ${this.viewerId}: [${attributeMin}, ${attributeMax}]`);
+                console.warn(`🔧 Using fallback range [0, 65535] for viewer ${this.viewerId}`);
+                attributeMin = 0;
+                attributeMax = 65535;
+                material.intensityRange = [attributeMin, attributeMax];
+            }
+            
+            if (isNaN(material.intensityRange[0]) || isNaN(material.intensityRange[1])) {
+                console.error(`❌ Material has NaN intensity range for viewer ${this.viewerId}: [${material.intensityRange[0]}, ${material.intensityRange[1]}]`);
+                console.warn(`🔧 Fixing material intensity range for viewer ${this.viewerId}`);
+                material.intensityRange = [attributeMin, attributeMax];
+            }
             
             sldIntensityRange.slider({
                 range: true,
@@ -2973,12 +2997,23 @@ export class MultiViewerSidebar {
         populate();
         
         // Event listeners for classification changes
-        this.viewer.addEventListener("classifications_changed", () => {
+        this.viewer.addEventListener("classifications_changed", (event) => {
+            // CUSTOM - Only respond to events from our own viewer to prevent cross-contamination
+            if (event.viewer !== this.viewer) {
+                console.log(`Ignoring classifications_changed event from different viewer for ${this.viewerId}`);
+                return;
+            }
             elClassificationList.empty();
             populate();
         });
         
-        this.viewer.addEventListener("classification_visibility_changed", () => {
+        this.viewer.addEventListener("classification_visibility_changed", (event) => {
+            // CUSTOM - Only respond to events from our own viewer to prevent cross-contamination
+            if (event.viewer !== this.viewer) {
+                console.log(`Ignoring classification event from different viewer for ${this.viewerId}`);
+                return;
+            }
+            
             console.log(`Classification visibility changed event triggered for viewer ${this.viewerId}`);
             
             // Re-enable automatic state updates but with better debugging

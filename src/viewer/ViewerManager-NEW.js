@@ -1237,7 +1237,6 @@ export class ViewerManager extends EventDispatcher {
         // Check if the event is from a sidebar control - if so, let it pass through unmodified
         if (this.isSidebarControlEvent(event)) {
             // Don't interfere with sidebar control events - allow default behavior
-            console.log(`ViewerManager: Allowing sidebar control event (${eventType}) on element:`, event.target);
             // Explicitly allow the event to continue with default behavior
             return; // Early return without preventDefault/stopPropagation
         }
@@ -1643,8 +1642,13 @@ export class ViewerManager extends EventDispatcher {
         
         // Apply default settings
         sharedInstance.pointcloud.position.z = 0;
-        sharedInstance.pointcloud.material.size = 3;
+        // CUSTOM - Set point size to 0.1 and minSize to 1.0 specifically for multi-viewer
+        sharedInstance.pointcloud.material.size = 0.1;
+        sharedInstance.pointcloud.material.uniforms.minSize.value = 1.0;
         sharedInstance.pointcloud.material.pointSizeType = window.Potree.PointSizeType.FIXED;
+        
+        // CUSTOM - Set viewer-specific default attributes
+        // COMMENTED OUT FOR DEBUGGING: this.setViewerSpecificAttribute(viewerId, sharedInstance.pointcloud.material);
         
         // Auto-zoom to fit
         viewer.fitToScreen();
@@ -1674,8 +1678,13 @@ export class ViewerManager extends EventDispatcher {
                 
                 // Apply default settings
                 sharedInstance.pointcloud.position.z = 0;
-                sharedInstance.pointcloud.material.size = 3;
+                // CUSTOM - Set point size to 0.1 and minSize to 1.0 specifically for multi-viewer
+                sharedInstance.pointcloud.material.size = 0.1;
+                sharedInstance.pointcloud.material.uniforms.minSize.value = 1.0;
                 sharedInstance.pointcloud.material.pointSizeType = window.Potree.PointSizeType.FIXED;
+                
+                // CUSTOM - Set viewer-specific default attributes
+                // COMMENTED OUT FOR DEBUGGING: this.setViewerSpecificAttribute(viewerId, sharedInstance.pointcloud.material);
                 
                 // Auto-zoom to fit
                 viewer.fitToScreen();
@@ -1691,6 +1700,40 @@ export class ViewerManager extends EventDispatcher {
         return results;
     }
     
+    /**
+     * CUSTOM - Set viewer-specific default attributes
+     * COMMENTED OUT FOR DEBUGGING POINT CLOUD LOADING ISSUES
+     * 1st viewer: intensity gradient, 2nd: classification, 3rd: rgba, 4th: intensity
+     * @param {string} viewerId - Viewer ID
+     * @param {Object} material - Point cloud material
+     */
+    /*
+    setViewerSpecificAttribute(viewerId, material) {
+        // Get viewer order based on when they were created
+        const viewerIds = this.registry.getViewerIds();
+        const viewerIndex = viewerIds.indexOf(viewerId);
+        
+        // Default attribute mapping
+        const attributeMap = [
+            'intensity_gradient', // 1st viewer
+            'classification',     // 2nd viewer  
+            'rgba',              // 3rd viewer
+            'intensity'          // 4th viewer
+        ];
+        
+        // Use modulo to handle more than 4 viewers (cycles through the pattern)
+        const targetAttribute = attributeMap[viewerIndex % attributeMap.length];
+        
+        // Set the attribute if it exists
+        if (material.activeAttributeName !== undefined) {
+            material.activeAttributeName = targetAttribute;
+            console.log(`ViewerManager: Set viewer '${viewerId}' (index ${viewerIndex}) to attribute '${targetAttribute}'`);
+        } else {
+            console.warn(`ViewerManager: Could not set attribute for viewer '${viewerId}' - material.activeAttributeName is undefined`);
+        }
+    }
+    */
+
     /**
      * Get memory usage statistics
      */

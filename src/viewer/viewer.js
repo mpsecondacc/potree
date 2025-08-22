@@ -148,7 +148,10 @@ export class Viewer extends EventDispatcher{
 		this.useEDL = false;
 		this.description = "";
 
-		this.classifications = ClassificationScheme.DEFAULT;
+		// CUSTOM - Create deep copy of classifications to prevent cross-viewer sharing
+		this.classifications = JSON.parse(JSON.stringify(ClassificationScheme.DEFAULT));
+		// CUSTOM - Initialize classification update tracking to prevent cross-viewer pollution
+		this._classificationUpdateTime = Date.now();
 
 		this.moveSpeed = 10;
 
@@ -712,7 +715,10 @@ export class Viewer extends EventDispatcher{
 	}
 
 	setClassifications(classifications){
-		this.classifications = classifications;
+		// CUSTOM - Create deep copy to prevent cross-viewer sharing
+		this.classifications = JSON.parse(JSON.stringify(classifications));
+		// CUSTOM - Track classification update time to prevent cross-viewer pollution
+		this._classificationUpdateTime = Date.now();
 
 		this.dispatchEvent({'type': 'classifications_changed', 'viewer': this});
 	}
@@ -720,9 +726,13 @@ export class Viewer extends EventDispatcher{
 	setClassificationVisibility (key, value) {
 		if (!this.classifications[key]) {
 			this.classifications[key] = {visible: value, name: 'no name'};
+			// CUSTOM - Track classification update time to prevent cross-viewer pollution
+			this._classificationUpdateTime = Date.now();
 			this.dispatchEvent({'type': 'classification_visibility_changed', 'viewer': this});
 		} else if (this.classifications[key].visible !== value) {
 			this.classifications[key].visible = value;
+			// CUSTOM - Track classification update time to prevent cross-viewer pollution
+			this._classificationUpdateTime = Date.now();
 			this.dispatchEvent({'type': 'classification_visibility_changed', 'viewer': this});
 		}
 	}
@@ -753,6 +763,8 @@ export class Viewer extends EventDispatcher{
 		}
 
 		if(somethingChanged){
+			// CUSTOM - Track classification update time to prevent cross-viewer pollution
+			this._classificationUpdateTime = Date.now();
 			this.dispatchEvent({'type': 'classification_visibility_changed', 'viewer': this});
 		}
 	}
@@ -1682,8 +1694,18 @@ export class Viewer extends EventDispatcher{
 			material.uniforms.uFilterGPSTimeClipRange.value = this.filterGPSTimeRange;
 			material.uniforms.uFilterPointSourceIDClipRange.value = this.filterPointSourceIDRange;
 
-			material.classification = this.classifications;
-			material.recomputeClassification();
+			// CUSTOM - Only update classification if not already set for this viewer or if explicitly changed
+			// This prevents cross-viewer classification sharing via frame-level overrides
+			if (!material._classificationInitialized || 
+				material._viewerId !== this.viewerId || 
+				material._lastClassificationUpdate !== this._classificationUpdateTime) {
+				
+				material.classification = this.classifications;
+				material._classificationInitialized = true;
+				material._viewerId = this.viewerId;
+				material._lastClassificationUpdate = this._classificationUpdateTime;
+				material.recomputeClassification();
+			}
 
 			this.updateMaterialDefaults(pointcloud);
 		}
