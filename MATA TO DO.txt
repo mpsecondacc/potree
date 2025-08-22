@@ -1,0 +1,88 @@
+MATA TO DO - Point Cloud Material Sharing Between Viewports
+
+## CRITICAL ISSUE: Material Instance Sharing
+**Problem**: All viewers share the SAME material instance. Changes to material properties in one viewer immediately affect all other viewers because they reference the identical JavaScript object.
+
+### Evidence from SharedResourceManager-NEW.js:
+- Line 156: `viewerPointCloud.material = this.createViewerMaterial(sharedPC, viewerId);`
+- Line 227: `const viewerMaterial = originalMaterial;` (direct reference, not clone)
+- Lines 224-226: Comment explicitly states "Point cloud materials are typically shared and shouldn't need individual instances"
+
+### Root Cause:
+```javascript
+createViewerMaterial(sharedPC, viewerId) {
+    const originalMaterial = sharedPC.originalMaterial;
+    
+    // Point cloud materials are typically shared and shouldn't need individual instances
+    // unless we need per-viewer customization
+    const viewerMaterial = originalMaterial;  // <-- DIRECT REFERENCE, NOT CLONE
+    
+    // This creates a wrapper but still references the same underlying material object
+    const materialWrapper = {
+        ...originalMaterial,  // <-- STILL SHARES THE SAME OBJECT
+        _viewerId: viewerId,
+        _sharedResourceId: sharedPC.id,
+        _isSharedResource: true,
+        _originalMaterial: originalMaterial
+    };
+}
+```
+
+## REQUIRED ARCHITECTURAL CHANGES:
+
+### 1. Material Instance Isolation
+**Current**: All viewers share same material object
+**Required**: Each viewer needs its own material instance
+**Solution**: Modify `SharedResourceManager.createViewerMaterial()` to clone materials instead of sharing references
+
+### 2. Deep Material Cloning
+**Challenge**: Three.js PointCloudMaterial contains complex properties (textures, uniforms, shaders)
+**Required**: Proper material cloning that preserves all properties but creates separate instances
+**Solution**: Implement deep cloning for PointCloudMaterial with texture sharing but property isolation
+
+### 3. Property Synchronization Strategy
+**Options**: 
+A) Complete isolation (each viewer has independent material settings)
+B) Selective sharing (share textures/shaders, isolate visual properties like size, opacity, etc.)
+C) Synchronized defaults with override capability
+
+### 4. Performance Considerations
+**Original Design**: Shared materials for memory efficiency
+**New Requirement**: Individual materials for per-viewer customization
+**Balance**: Share heavy resources (textures, geometry) but isolate property objects
+
+## IMPLEMENTATION APPROACH:
+
+### Phase 1: Material Cloning Infrastructure
+1. Create `PointCloudMaterial.clone()` method with proper Three.js material cloning
+2. Modify `SharedResourceManager.createViewerMaterial()` to use cloning
+3. Test basic material isolation between viewers
+
+### Phase 2: Property Management System
+1. Implement material property change events per viewer
+2. Ensure UI controls only affect the specific viewer's material
+3. Test all material properties (size, opacity, shape, RGB settings)
+
+### Phase 3: Resource Optimization
+1. Optimize texture/shader sharing while maintaining property isolation
+2. Implement memory usage tracking for cloned materials
+3. Add cleanup for unused material instances
+
+## COMPLEXITY ESTIMATE:
+**High Complexity** - Requires fundamental changes to core resource management architecture
+**Dependencies**: Three.js material internals, Potree material system, SharedResourceManager
+**Risk**: May affect rendering performance and memory usage
+**Timeline**: Major refactoring effort, requires thorough testing
+
+## FILES TO MODIFY:
+- `src/viewer/SharedResourceManager-NEW.js` (material creation)
+- `src/materials/PointCloudMaterial.js` (cloning implementation)
+- `src/viewer/MultiViewerSidebar-NEW.js` (material property binding)
+- `src/viewer/ViewerManager-NEW.js` (material lifecycle management)
+
+## TESTING REQUIREMENTS:
+- Verify material changes only affect target viewer
+- Test all UI controls (sliders, selectors, checkboxes)
+- Performance testing with multiple viewers and large point clouds
+- Memory leak testing for material cleanup
+- Visual regression testing for rendering quality

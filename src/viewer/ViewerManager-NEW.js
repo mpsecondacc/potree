@@ -334,7 +334,7 @@ export class ViewerManager extends EventDispatcher {
             
             this.viewerSidebars.set(viewerId, sidebar);
             
-            console.log(`Created and initialized sidebar for viewer '${viewerId}'`);
+            console.log(`Created and initialized sidebar for viewer '${viewerId}' - Total sidebars: ${this.viewerSidebars.size}`);
             
         } catch (error) {
             console.error(`Failed to create sidebar for viewer '${viewerId}':`, error);

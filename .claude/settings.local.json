@@ -16,7 +16,8 @@
       "Bash(rg:*)",
       "Bash(cp:*)",
       "Bash(git checkout:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": [],
