@@ -153,28 +153,27 @@
     
     <div id="viewer-container" class="container"></div>
     
-    <div class="status" id="status">
-       
-    </div>
     
     <!-- Load Potree as traditional script instead of ES6 module -->
     <script src="./build/potree/potree.js"></script>
     <!-- Load LAS/LAZ support after potree.js -->
     <script src="./libs/plasio/js/laslaz.js"></script>
+    <!-- Load ViewerAttributeManager -->
+    <script src="./src/viewer/ViewerAttributeManager-NEW.js"></script>
     
     <script>
         let multiViewer = null;
         let testViewers = [];
         
+        // Initialize ViewerAttributeManager
+        window.viewerAttributeManager = new ViewerAttributeManager();
+        
         // Potree is now available globally as window.Potree
         
         // Test utilities
         function log(message) {
-            const statusEl = document.getElementById('status');
             const timestamp = new Date().toLocaleTimeString();
-            statusEl.textContent += `\n[${timestamp}] ${message}`;
-            statusEl.scrollTop = statusEl.scrollHeight;
-            console.log(message);
+            console.log(`[${timestamp}] ${message}`);
         }
         
         function enableButton(id) {
