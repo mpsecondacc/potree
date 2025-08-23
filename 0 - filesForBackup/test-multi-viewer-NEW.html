@@ -102,7 +102,6 @@
     <p>Testing actual viewer creation, layout management, and synchronization.</p>
     
     <div class="controls">
-        <button onclick="testCreateMultiViewer()" id="createBtn">Create MultiViewer</button>
         <button onclick="testCreateViewers()" id="createViewersBtn" disabled>Create Viewers (2)</button>
         <button onclick="testLayout1x2()" id="layout1x2Btn" disabled>Layout Main+2 Side</button>
         <button onclick="testLayout2x2()" id="layout2x2Btn" disabled>Layout 2x2 (4 viewers)</button>
@@ -2098,6 +2097,18 @@
             }
         };
         
+        // CUSTOM - Auto-initialize MultiViewer on page load
+        document.addEventListener('DOMContentLoaded', async function() {
+            log('🚀 Auto-initializing MultiViewer on page load...');
+            
+            try {
+                await testCreateMultiViewer();
+                log('✅ MultiViewer auto-initialized successfully');
+            } catch (error) {
+                log(`❌ Auto-initialization failed: ${error.message}`);
+                console.error('Auto-init error:', error);
+            }
+        });
         
     </script>
 </body>

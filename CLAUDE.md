@@ -146,3 +146,14 @@ All examples require the full dependency stack - attempting to minimize dependen
 - when having a to do list always stop after checking one off, i must allow you to proceed
 - when writing code in the src/ files always leave a comment "CUSTOM" so i know if something was changed by you
 - all new .js files in src/ directory need to have suffix "-NEW"
+- all code must be written in components and written for future scalability
+- keep in mind the security 
+- performance is a key metric, do not write unoptimized code and always give suggestions if something gives better performance
+
+
+● The implementation is now ready for testing. Both issues have been addressed:
+
+  1. Earth Controls orthographic mode - Enhanced with proper camera mode detection and pivot
+  indicator reset --> still zooming in and out behaviour
+  2. Profile creation JSTree integration - Fixed to use the actual JSTree structure instead of
+  custom DOM ---> profile now created under JSTree but show 2D profile is missing, whatever happens when clicking that button needs to be called so that the profile view shows up after drawing a profile

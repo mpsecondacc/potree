@@ -132,10 +132,11 @@ export class ViewerManager extends EventDispatcher {
             this.handleResize();
         });
         
+        // CUSTOM - Focus functionality commented out as requested
         // Handle container click for viewer focus
-        this.containerElement.addEventListener('click', (event) => {
-            this.handleContainerClick(event);
-        });
+        // this.containerElement.addEventListener('click', (event) => {
+        //     this.handleContainerClick(event);
+        // });
     }
     
     /**
@@ -518,6 +519,9 @@ export class ViewerManager extends EventDispatcher {
         
         // Enable viewer controls if they exist
         this.enableViewerControls(viewer, viewerId);
+        
+        // CUSTOM - Ensure controls sceneControls are properly set up for rendering
+        this.setupControlsRendering(viewer, viewerId);
     }
     
     /**
@@ -805,6 +809,49 @@ export class ViewerManager extends EventDispatcher {
         }
         
         console.log(`ViewerManager: All controls disabled for viewer '${viewerId}'`);
+    }
+    
+    /**
+     * CUSTOM - Setup controls rendering for multi-viewer (fixes Earth Controls orbit sphere)
+     * @param {Viewer} viewer - The viewer instance
+     * @param {string} viewerId - The viewer ID
+     */
+    setupControlsRendering(viewer, viewerId) {
+        try {
+            // Ensure controls have proper scene setup
+            if (viewer.controls) {
+                console.log(`ViewerManager: Setting up controls rendering for viewer '${viewerId}'`);
+                
+                // Make sure controls.sceneControls exists and is properly configured
+                if (!viewer.controls.sceneControls) {
+                    console.warn(`ViewerManager: controls.sceneControls missing for viewer '${viewerId}'`);
+                    return;
+                }
+                
+                // Ensure the controls scene is linked to the viewer's scene
+                if (viewer.controls.scene !== viewer.scene) {
+                    viewer.controls.scene = viewer.scene;
+                    console.log(`ViewerManager: Linked controls.scene to viewer.scene for '${viewerId}'`);
+                }
+                
+                // CUSTOM - Ensure EarthControls work for both perspective and orthographic cameras
+                if (viewer.controls && viewer.controls.pivotIndicator) {
+                    // Reset pivot indicator state for both camera modes
+                    viewer.controls.pivotIndicator.visible = false;
+                    console.log(`ViewerManager: Reset EarthControls pivot indicator for camera mode: ${viewer.scene.cameraMode}`);
+                }
+                
+                // Log controls state for debugging
+                console.log(`ViewerManager: Controls setup for '${viewerId}' - Camera mode: ${viewer.scene.cameraMode}, Controls type: ${viewer.controls.constructor.name}`);
+                
+                console.log(`ViewerManager: Controls rendering setup complete for viewer '${viewerId}'`);
+            } else {
+                console.warn(`ViewerManager: No controls object found for viewer '${viewerId}'`);
+            }
+            
+        } catch (error) {
+            console.error(`ViewerManager: Error setting up controls rendering for '${viewerId}': ${error.message}`);
+        }
     }
     
     /**
@@ -1244,26 +1291,25 @@ export class ViewerManager extends EventDispatcher {
         // RENDER OPTIMIZATION: Mark viewer as having activity
         this.markViewerActivity(viewerId);
         
+        // CUSTOM - Focus functionality commented out as requested
         // In focus lock mode, only process if this viewer is active
-        if (this.focusLockEnabled) {
-            if (!viewer.multiViewerConfig.isActive || !viewer.multiViewerConfig.receivesInput) {
-                event.preventDefault();
-                event.stopPropagation();
-                event.stopImmediatePropagation();
-                console.log(`ViewerManager: [LOCKED] Blocked ${eventType} event on inactive viewer '${viewerId}'`);
-                return false;
-            }
-        }
-        // In hover mode, activate the viewer on mouse events
-        else {
-            // Auto-activate viewer on mouse interaction (hover mode)
-            // Include mouseenter, mousemove, mousedown, mouseup for comprehensive hover detection
-            if (eventType === 'mousedown' || eventType === 'mousemove' || eventType === 'mouseup' || 
-                eventType === 'mouseenter' || eventType === 'wheel') {
-                if (this.activeViewerId !== viewerId) {
-                    this.setActiveViewer(viewerId);
-                    console.log(`ViewerManager: [HOVER] Auto-activated viewer '${viewerId}' on ${eventType}`);
-                }
+        // if (this.focusLockEnabled) {
+        //     if (!viewer.multiViewerConfig.isActive || !viewer.multiViewerConfig.receivesInput) {
+        //         event.preventDefault();
+        //         event.stopPropagation();
+        //         event.stopImmediatePropagation();
+        //         console.log(`ViewerManager: [LOCKED] Blocked ${eventType} event on inactive viewer '${viewerId}'`);
+        //         return false;
+        //     }
+        // }
+        // In hover mode, activate the viewer on mouse events - always enabled now
+        // Auto-activate viewer on mouse interaction (hover mode)
+        // Include mouseenter, mousemove, mousedown, mouseup for comprehensive hover detection
+        if (eventType === 'mousedown' || eventType === 'mousemove' || eventType === 'mouseup' || 
+            eventType === 'mouseenter' || eventType === 'wheel') {
+            if (this.activeViewerId !== viewerId) {
+                this.setActiveViewer(viewerId);
+                console.log(`ViewerManager: [HOVER] Auto-activated viewer '${viewerId}' on ${eventType}`);
             }
         }
         
@@ -1333,22 +1379,21 @@ export class ViewerManager extends EventDispatcher {
         // RENDER OPTIMIZATION: Mark viewer as having activity
         this.markViewerActivity(viewerId);
         
+        // CUSTOM - Focus functionality commented out as requested  
         // In focus lock mode, only process if this viewer is active
-        if (this.focusLockEnabled) {
-            if (!viewer.multiViewerConfig.isActive || !viewer.multiViewerConfig.receivesInput) {
-                event.preventDefault();
-                event.stopPropagation();
-                event.stopImmediatePropagation();
-                console.log(`ViewerManager: [LOCKED] Blocked wheel event on inactive viewer '${viewerId}'`);
-                return false;
-            }
-        }
-        // In hover mode, activate the viewer on wheel events
-        else {
-            if (this.activeViewerId !== viewerId) {
-                this.setActiveViewer(viewerId);
-                console.log(`ViewerManager: [HOVER] Auto-activated viewer '${viewerId}' on wheel`);
-            }
+        // if (this.focusLockEnabled) {
+        //     if (!viewer.multiViewerConfig.isActive || !viewer.multiViewerConfig.receivesInput) {
+        //         event.preventDefault();
+        //         event.stopPropagation();
+        //         event.stopImmediatePropagation();
+        //         console.log(`ViewerManager: [LOCKED] Blocked wheel event on inactive viewer '${viewerId}'`);
+        //         return false;
+        //     }
+        // }
+        // In hover mode, activate the viewer on wheel events - always enabled now
+        if (this.activeViewerId !== viewerId) {
+            this.setActiveViewer(viewerId);
+            console.log(`ViewerManager: [HOVER] Auto-activated viewer '${viewerId}' on wheel`);
         }
         
         const mode = this.focusLockEnabled ? 'LOCKED' : 'HOVER';
@@ -1361,12 +1406,13 @@ export class ViewerManager extends EventDispatcher {
      * Handle touch events for active viewer
      */
     handleViewerTouchEvent(event, viewer, viewerId, eventType) {
+        // CUSTOM - Focus functionality commented out as requested
         // Only process if this viewer is active
-        if (!viewer.multiViewerConfig.isActive || !viewer.multiViewerConfig.receivesInput) {
-            event.preventDefault();
-            event.stopPropagation();
-            return false;
-        }
+        // if (!viewer.multiViewerConfig.isActive || !viewer.multiViewerConfig.receivesInput) {
+        //     event.preventDefault();
+        //     event.stopPropagation();
+        //     return false;
+        // }
         
         // Let the viewer handle the event normally
         return true;
@@ -1379,12 +1425,13 @@ export class ViewerManager extends EventDispatcher {
         // RENDER OPTIMIZATION: Mark viewer as having activity
         this.markViewerActivity(viewerId);
         
+        // CUSTOM - Focus functionality commented out as requested
         // Only process if this viewer is active
-        if (!viewer.multiViewerConfig.isActive || !viewer.multiViewerConfig.receivesInput) {
-            event.preventDefault();
-            event.stopPropagation();
-            return false;
-        }
+        // if (!viewer.multiViewerConfig.isActive || !viewer.multiViewerConfig.receivesInput) {
+        //     event.preventDefault();
+        //     event.stopPropagation();
+        //     return false;
+        // }
         
         // Let the viewer handle the event normally
         return true;
@@ -1394,12 +1441,13 @@ export class ViewerManager extends EventDispatcher {
      * Handle context menu for active viewer
      */
     handleViewerContextMenu(event, viewer, viewerId) {
+        // CUSTOM - Focus functionality commented out as requested
         // Only process if this viewer is active
-        if (!viewer.multiViewerConfig.isActive || !viewer.multiViewerConfig.receivesInput) {
-            event.preventDefault();
-            event.stopPropagation();
-            return false;
-        }
+        // if (!viewer.multiViewerConfig.isActive || !viewer.multiViewerConfig.receivesInput) {
+        //     event.preventDefault();
+        //     event.stopPropagation();
+        //     return false;
+        // }
         
         // Let the viewer handle the event normally (or prevent if needed)
         // For now, prevent context menu to avoid browser menu
@@ -1417,23 +1465,25 @@ export class ViewerManager extends EventDispatcher {
         const container = viewer.renderArea;
         const label = container.querySelector('.potree-viewer-label');
         
-        if (isActive) {
-            // Active viewer: Bright blue glowing border
-            container.style.borderColor = '#00aaff';
-            container.style.borderWidth = '4px';
-            container.style.borderStyle = 'solid';
-            container.style.zIndex = '100';
-            container.style.boxShadow = '0 0 15px rgba(0, 170, 255, 0.8), inset 0 0 5px rgba(0, 170, 255, 0.3)';
-            container.style.outline = '2px solid rgba(0, 170, 255, 0.5)';
-            container.style.outlineOffset = '2px';
-            if (label) {
-                label.style.background = 'rgba(0, 170, 255, 0.9)';
-                label.style.color = '#ffffff';
-                label.style.fontWeight = 'bold';
-                label.style.textShadow = '0 1px 2px rgba(0,0,0,0.5)';
-            }
-        } else {
-            // Inactive viewer: Gray border, no glow
+        // CUSTOM - Focus functionality commented out as requested
+        // All viewers get the same neutral gray border, no focus highlighting
+        // if (isActive) {
+        //     // Active viewer: Bright blue glowing border
+        //     container.style.borderColor = '#00aaff';
+        //     container.style.borderWidth = '4px';
+        //     container.style.borderStyle = 'solid';
+        //     container.style.zIndex = '100';
+        //     container.style.boxShadow = '0 0 15px rgba(0, 170, 255, 0.8), inset 0 0 5px rgba(0, 170, 255, 0.3)';
+        //     container.style.outline = '2px solid rgba(0, 170, 255, 0.5)';
+        //     container.style.outlineOffset = '2px';
+        //     if (label) {
+        //         label.style.background = 'rgba(0, 170, 255, 0.9)';
+        //         label.style.color = '#ffffff';
+        //         label.style.fontWeight = 'bold';
+        //         label.style.textShadow = '0 1px 2px rgba(0,0,0,0.5)';
+        //     }
+        // } else {
+            // All viewers: Neutral gray border, no focus indication
             container.style.borderColor = '#888888';
             container.style.borderWidth = '2px';
             container.style.borderStyle = 'solid';
@@ -1447,9 +1497,10 @@ export class ViewerManager extends EventDispatcher {
                 label.style.fontWeight = 'normal';
                 label.style.textShadow = 'none';
             }
-        }
+        // }  // CUSTOM - Removed extra closing brace from commented if/else
         
-        console.log(`ViewerManager: Updated visual state for '${viewerId}' - ${isActive ? 'ACTIVE (blue glow)' : 'INACTIVE (gray)'}`);
+        // CUSTOM - Focus functionality commented out - all viewers now have same gray styling
+        console.log('ViewerManager: Updated visual state for \'' + viewerId + '\' - neutral gray styling (focus disabled)');
     }
     
     /**

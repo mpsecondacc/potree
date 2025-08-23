@@ -413,6 +413,15 @@ body{
 	width: 		100% !important;
 }
 
+/* CUSTOM - Fix dropdown z-index issue - dropdowns should appear above sidebar content */
+.ui-selectmenu-menu {
+	z-index: 1000 !important;
+}
+
+.ui-selectmenu-open {
+	z-index: 1001 !important;
+}
+
 .pv-menu-list > li > .ui-slider{
 	background-color: 	var(--color-1) !important;
 	background: 		none;

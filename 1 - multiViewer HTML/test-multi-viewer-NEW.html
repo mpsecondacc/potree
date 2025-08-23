@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Viewer Test - Real Implementation</title>
+    
+    <!-- CSS Dependencies -->
+    <link rel="stylesheet" type="text/css" href="../build/potree/potree.css">
+    <link rel="stylesheet" type="text/css" href="../libs/jquery-ui/jquery-ui.min.css">
+    <link rel="stylesheet" type="text/css" href="../libs/spectrum/spectrum.css">
+    <link rel="stylesheet" type="text/css" href="../libs/jstree/themes/mixed/style.css">
+    
+    <!-- Critical dependencies that need to be loaded before potree.js -->
+    <script src="../libs/jquery/jquery-3.1.1.min.js"></script>
+    <script src="../libs/spectrum/spectrum.js"></script>
+    <script src="../libs/jquery-ui/jquery-ui.min.js"></script>
+    <script src="../libs/other/BinaryHeap.js"></script>
+    <script src="../libs/tween/tween.min.js"></script>
+    <script src="../libs/d3/d3.js"></script>
+    <script src="../libs/proj4/proj4.js"></script>
+    <script src="../libs/i18next/i18next.js"></script>
+    <script src="../libs/jstree/jstree.js"></script>
+    <style>
+        /* CUSTOM - New minimal layout for CAD development */
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: white;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .layout-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 15px;
+            background: #2a2a2a;
+            border-bottom: 2px solid #444;
+            gap: 20px;
+            flex-shrink: 0;
+        }
+        
+        .layout-icon {
+            width: 60px;
+            height: 60px;
+            background: #333;
+            border: 2px solid #555;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            color: #ccc;
+            transition: all 0.3s ease;
+            user-select: none;
+        }
+        
+        .layout-icon:hover {
+            background: #444;
+            border-color: #00aaff;
+            color: #00aaff;
+            transform: translateY(-2px);
+        }
+        
+        .layout-icon.active {
+            background: #00aaff;
+            border-color: #0088cc;
+            color: white;
+        }
+        
+        .viewer-container {
+            flex: 1;
+            width: 100%;
+            background: #2a2a2a;
+            position: relative;
+            display: block;
+            box-sizing: border-box;
+            min-height: 0; /* Important for flex child */
+        }
+        
+        /* Hide old controls */
+        .controls {
+            display: none;
+        }
+        
+        button {
+            margin: 5px;
+            padding: 8px 16px;
+            background: #0066cc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background: #0052a3;
+        }
+        
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            background: #333;
+            padding: 10px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        
+        .potree-multi-viewer-container {
+            border: 1px solid #666;
+        }
+        
+        .potree-viewer-container {
+            border: 2px solid #0088ff !important;
+            background: #222222 !important;
+            min-width: 100px !important;
+            min-height: 100px !important;
+            overflow: visible !important;
+        }
+        
+        .potree-viewer-container canvas {
+            display: block !important;
+            width: 100% !important;
+            height: 100% !important;
+        }
+        
+        .potree-viewer-label {
+            color: white !important;
+            background: rgba(0, 100, 200, 0.8) !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- CUSTOM - New minimal layout for CAD development -->
+    <div class="layout-controls">
+        <div class="layout-icon active" id="layout1" onclick="setLayout(1)" title="Single View">1</div>
+        <div class="layout-icon" id="layout2" onclick="setLayout(2)" title="1x1 Layout (2 viewers)">2</div>
+        <div class="layout-icon" id="layout3" onclick="setLayout(3)" title="1x2 Layout (3 viewers)">3</div>
+        <div class="layout-icon" id="layout4" onclick="setLayout(4)" title="2x2 Layout (4 viewers)">4</div>
+    </div>
+
+    <div id="viewer-container" class="viewer-container"></div>
+
+    <!-- CUSTOM - All test buttons commented out for clean CAD interface -->
+    <!--
+    <div class="controls">
+        <button onclick="testCreateViewers()" id="createViewersBtn" disabled>Create Viewers (2)</button>
+        <button onclick="testLayout1x2()" id="layout1x2Btn" disabled>Layout Main+2 Side</button>
+        <button onclick="testLayout2x2()" id="layout2x2Btn" disabled>Layout 2x2 (4 viewers)</button>
+        <button onclick="toggleSync()" id="toggleSyncBtn" disabled>Toggle Sync (OFF)</button>
+        <!-- CUSTOM - Focus functionality commented out as requested -->
+        <!-- <button onclick="toggleLockFocus()" id="lockFocusBtn" disabled>Lock Focus (OFF)</button> -->
+
+        <!--
+        <button onclick="testAddViewer()" id="addViewerBtn" disabled>Add Viewer</button>
+        <button onclick="testRemoveViewer()" id="removeViewerBtn" disabled>Remove Viewer</button>
+        <button onclick="testIdentification()" id="identificationBtn" disabled>Test Identification</button>
+        <button onclick="testStatus()" id="statusBtn" disabled>Show Status</button>
+        <button onclick="testMaterialClone()">Test Material Clone</button>
+        <button onclick="testMaterialIsolation()" id="testIsolationBtn">Test Material Isolation</button>
+        <button onclick="testComprehensiveMaterialIsolation()" id="testComprehensiveBtn" style="background: #4CAF50; color: white; font-weight: bold;">🧪 Test All Fixes</button>
+        -->
+        <!-- Performance Monitoring Controls -->
+
+        <!--
+        <br><br><strong>Performance Monitoring:</strong><br>
+        <button onclick="testRenderingPerformance()" id="performanceBtn" disabled>Performance Test</button>
+        <button onclick="startPerformanceMonitoring()" id="startMonitorBtn" disabled>Start Monitor</button>
+        <button onclick="stopPerformanceMonitoring()" id="stopMonitorBtn" disabled>Stop Monitor</button>
+        <button onclick="testForceRender()" id="forceRenderBtn" disabled>Force Render</button>
+        -->
+        <!-- Cross-Viewer Communication Controls -->
+         <!--
+        <br><br><strong>Cross-Viewer Communication:</strong><br>
+        <button onclick="testCommunicationSystem()" id="commSystemBtn" disabled>Test Communication</button>
+        <button onclick="testSharedGeometry()" id="sharedGeomBtn" disabled>Test Shared Geometry</button>
+        <button onclick="testDrawLine()" id="drawLineBtn" disabled>Draw Shared Line</button>
+        <button onclick="testClearShared()" id="clearSharedBtn" disabled>Clear Shared Objects</button>
+        <button onclick="testCommStats()" id="commStatsBtn" disabled>Communication Stats</button>
+        -->
+        <!-- Configuration Persistence Controls -->
+         <!--
+        <br><br><strong>Configuration Persistence:</strong><br>
+        <button onclick="testSaveConfiguration()" id="saveConfigBtn" disabled>Save Config</button>
+        <button onclick="testLoadConfiguration()" id="loadConfigBtn" disabled>Load Config</button>
+        <button onclick="testListConfigurations()" id="listConfigBtn" disabled>List Configs</button>
+        <button onclick="testExportConfiguration()" id="exportConfigBtn" disabled>Export Config</button>
+        <input type="file" id="importFileInput" accept=".json" style="display: none;" onchange="testImportConfiguration(this)">
+        <button onclick="document.getElementById('importFileInput').click()" id="importConfigBtn" disabled>Import Config</button>
+        <button onclick="testDeleteConfiguration()" id="deleteConfigBtn" disabled>Delete Config</button>
+        -->
+        <!-- Viewer Sidebar Controls -->
+         <!--
+        <br><br><strong>Viewer Sidebars:</strong><br>
+        <button onclick="testOpenAllSidebars()" id="openAllSidebarsBtn" disabled>Open All Sidebars</button>
+        <button onclick="testCloseAllSidebars()" id="closeAllSidebarsBtn" disabled>Close All Sidebars</button>
+        <button onclick="testSidebarStats()" id="sidebarStatsBtn" disabled>Sidebar Stats</button>
+        <button onclick="testSidebarAPI()" id="sidebarAPIBtn" disabled>Test Sidebar API</button>
+        
+        <button onclick="testDestroy()" id="destroyBtn" disabled>Destroy</button>
+        -->
+    </div>
+    -->
+    
+    
+    <!-- Load Potree as traditional script instead of ES6 module -->
+    <script src="../build/potree/potree.js"></script>
+    <!-- Load LAS/LAZ support after potree.js -->
+    <script src="../libs/plasio/js/laslaz.js"></script>
+    <!-- Load ViewerAttributeManager -->
+    <script src="../src/viewer/ViewerAttributeManager-NEW.js"></script>
+    
+    <!-- Load ES6 modules for test functionality -->
+    <script type="module" src="./main.js"></script>
+    
+    <script>
+        // Legacy globals for backward compatibility
+        let multiViewer = null;
+        let testViewers = [];
+        
+        // Initialize ViewerAttributeManager
+        window.viewerAttributeManager = new ViewerAttributeManager();
+    </script>
+</body>
+</html>

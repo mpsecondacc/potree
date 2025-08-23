@@ -11,7 +11,7 @@
 
 import * as THREE from "../../libs/three.js/build/three.module.js";
 import {Utils} from "../utils.js";
-import {ElevationGradientRepeat} from "../defines.js";
+import {ElevationGradientRepeat, CameraMode} from "../defines.js";
 
 export class MultiViewerSidebar {
     
@@ -1098,12 +1098,68 @@ export class MultiViewerSidebar {
                 }
             }
         ));
+
+        // CUSTOM - Add Camera Projection Controls (Perspective/Orthographic)
+        const elCameraProjection = $(`
+            <selectgroup id="camera_projection_options_${this.viewerId}">
+                <option id="camera_projection_options_perspective_${this.viewerId}" value="PERSPECTIVE">Perspective</option>
+                <option id="camera_projection_options_orthigraphic_${this.viewerId}" value="ORTHOGRAPHIC">Orthographic</option>
+            </selectgroup>
+        `);
+        
+        elNavigation.append(elCameraProjection);
+        elCameraProjection.selectgroup({title: "Camera Projection"});
+        
+        // Handle camera projection change
+        elCameraProjection.find("input").click((e) => {
+            console.log(`🎯 Camera projection button clicked: ${e.target.value} for viewer ${this.viewerId}`);
+            console.log('🔍 Debug info:', {
+                'viewer exists': !!this.viewer,
+                'viewer.setCameraMode exists': !!(this.viewer && this.viewer.setCameraMode),
+                'viewer.scene exists': !!(this.viewer && this.viewer.scene),
+                'viewer.scene.pointclouds exists': !!(this.viewer && this.viewer.scene && this.viewer.scene.pointclouds),
+                'pointclouds count': (this.viewer && this.viewer.scene && this.viewer.scene.pointclouds) ? this.viewer.scene.pointclouds.length : 0,
+                'CameraMode[e.target.value]': CameraMode[e.target.value],
+                'current cameraMode': (this.viewer && this.viewer.scene) ? this.viewer.scene.cameraMode : 'undefined'
+            });
+            
+            if (this.viewer && this.viewer.setCameraMode && CameraMode[e.target.value] !== undefined) {
+                console.log(`✅ Calling setCameraMode(${CameraMode[e.target.value]}) for viewer ${this.viewerId}`);
+                this.viewer.setCameraMode(CameraMode[e.target.value]);
+                
+                // Verify the change took effect
+                setTimeout(() => {
+                    console.log(`🔄 After setCameraMode - current cameraMode: ${this.viewer.scene.cameraMode}`);
+                }, 50);
+            } else {
+                console.error(`❌ Cannot call setCameraMode - missing dependencies for viewer ${this.viewerId}`);
+            }
+        });
+        
+        // Set initial camera projection state (with delay to ensure selectgroup is ready)
+        setTimeout(() => {
+            console.log(`🔧 Setting initial camera projection state for viewer ${this.viewerId}`);
+            if (this.viewer.scene && this.viewer.scene.cameraMode !== undefined) {
+                const cameraMode = Object.keys(CameraMode)
+                    .filter(key => CameraMode[key] === this.viewer.scene.cameraMode);
+                console.log(`📍 Initial cameraMode: ${this.viewer.scene.cameraMode}, matched key: ${cameraMode[0]}`);
+                if (cameraMode.length > 0) {
+                    const targetInput = elCameraProjection.find(`input[value=${cameraMode[0]}]`);
+                    console.log(`🎛️ Found input element for ${cameraMode[0]}:`, targetInput.length > 0 ? 'YES' : 'NO');
+                    if (targetInput.length > 0) {
+                        targetInput.trigger("click");
+                    }
+                }
+            } else {
+                console.log(`⚠️ Cannot set initial state - viewer.scene.cameraMode is undefined for viewer ${this.viewerId}`);
+            }
+        }, 100);
         
         console.log(`Navigation toolbar initialized with multiple control tools for viewer ${this.viewerId}`);
     }
     
     /**
-     * Initialize Move Speed slider
+     * Initialize Move Speed slider - FIXED with exponential scaling like original sidebar.js
      */
     initMoveSpeedSlider() {
         const sldMoveSpeed = this.dom.find(`#sldMoveSpeed_${this.viewerId}`);
@@ -1114,17 +1170,28 @@ export class MultiViewerSidebar {
             return;
         }
         
+        // CUSTOM - Use same exponential scaling as original sidebar.js to fix earth controls bug
+        const speedRange = new THREE.Vector2(1, 10 * 1000); // 1 to 10,000
+
+        const toLinearSpeed = (value) => {
+            return Math.pow(value, 4) * speedRange.y + speedRange.x; // Convert 0-1 slider position to 1-10000 speed
+        };
+
+        const toExpSpeed = (value) => {
+            return Math.pow((value - speedRange.x) / speedRange.y, 1 / 4); // Convert 1-10000 speed to 0-1 slider position
+        };
+        
         // Get initial move speed (default fallback)
         const initialSpeed = (this.viewer.getMoveSpeed && this.viewer.getMoveSpeed()) || 10;
         
         sldMoveSpeed.slider({
-            value: initialSpeed,
-            min: 0.1,
-            max: 100,
-            step: 0.1,
+            value: toExpSpeed(initialSpeed), // Convert speed to slider position using exponential scaling
+            min: 0,
+            max: 1,
+            step: 0.01,
             slide: (event, ui) => { 
                 if (this.viewer.setMoveSpeed) {
-                    this.viewer.setMoveSpeed(ui.value);
+                    this.viewer.setMoveSpeed(toLinearSpeed(ui.value)); // Convert slider position to speed using exponential scaling
                 }
             }
         });
@@ -1132,12 +1199,12 @@ export class MultiViewerSidebar {
         // Set initial label
         lblMoveSpeed.html(initialSpeed.toFixed(1));
         
-        // Bind viewer event if available
+        // Bind viewer event if available - FIXED with exponential conversion
         if (this.viewer.addEventListener) {
             this.viewer.addEventListener('move_speed_changed', (event) => {
                 const newSpeed = this.viewer.getMoveSpeed ? this.viewer.getMoveSpeed() : initialSpeed;
                 lblMoveSpeed.html(newSpeed.toFixed(1));
-                sldMoveSpeed.slider({value: newSpeed});
+                sldMoveSpeed.slider({value: toExpSpeed(newSpeed)}); // Convert speed back to slider position using exponential scaling
             });
         }
     }
@@ -1342,11 +1409,39 @@ export class MultiViewerSidebar {
             const icon = `${resourcePath}/icons/distance.svg`; // Default measurement icon
             createNode(measurementID, measurement.name || 'Measurement', icon, measurement);
         };
+        
+        // CUSTOM - Profile event handler for shared storage across all viewers
+        const onProfileAdded = (e) => {
+            console.log(`Profile added in viewer ${this.viewerId}:`, e.profile.name);
+            
+            // Share profile across all viewers using communication system
+            this.shareProfileWithAllViewers(e.profile);
+            
+            // Create JSTree entry like original sidebar
+            const resourcePath = window.Potree.resourcePath || '../build/potree/resources';
+            const icon = `${resourcePath}/icons/profile.svg`;
+            createNode(measurementID, e.profile.name, icon, e.profile);
+        };
+        
+        // CUSTOM - Volume event handler for shared storage across all viewers  
+        const onVolumeAdded = (e) => {
+            console.log(`Volume added in viewer ${this.viewerId}:`, e.volume.name);
+            
+            // Share volume across all viewers using communication system
+            this.shareVolumeWithAllViewers(e.volume);
+            
+            // Create JSTree entry like original sidebar
+            const resourcePath = window.Potree.resourcePath || '../build/potree/resources';
+            const icon = `${resourcePath}/icons/box.svg`;
+            createNode(measurementID, e.volume.name, icon, e.volume);
+        };
 
-        // Bind event listeners to scene
+        // Bind event listeners to scene - CUSTOM: Added profile and volume events for shared storage
         if (this.viewer.scene && this.viewer.scene.addEventListener) {
             this.viewer.scene.addEventListener("pointcloud_added", onPointCloudAdded);
             this.viewer.scene.addEventListener("measurement_added", onMeasurementAdded);
+            this.viewer.scene.addEventListener("profile_added", onProfileAdded);
+            this.viewer.scene.addEventListener("volume_added", onVolumeAdded);
         }
 
         // Add existing point clouds
@@ -3146,6 +3241,229 @@ export class MultiViewerSidebar {
         }
         
         console.log(`GPS time filters initialized for viewer ${this.viewerId}`);
+    }
+    
+    /**
+     * CUSTOM - Share profile with all viewers using communication system
+     */
+    shareProfileWithAllViewers(profile) {
+        try {
+            // Get the ViewerManager from testCore
+            const testCore = window.testModules && window.testModules.testCore;
+            if (!testCore) {
+                console.warn('testCore not available for profile sharing');
+                return;
+            }
+            
+            const multiViewer = testCore.getMultiViewer();
+            if (!multiViewer) {
+                console.warn('MultiViewer not available for profile sharing');
+                return;
+            }
+            
+            // Create shared profile data
+            const sharedProfileData = {
+                type: 'profile',
+                uuid: profile.uuid,
+                name: profile.name,
+                points: profile.points ? profile.points.map(point => ({x: point.x, y: point.y, z: point.z})) : [],
+                width: profile.width || 1,
+                closed: profile.closed || false,
+                createdBy: this.viewerId,
+                timestamp: Date.now()
+            };
+            
+            // Add to shared geometry system
+            const geometryId = multiViewer.addSharedGeometry(sharedProfileData, `profile_${profile.uuid}`);
+            
+            if (geometryId) {
+                console.log(`Shared profile ${profile.name} with ID: ${geometryId}`);
+                
+                // Send message to all viewers to update their sidebars
+                multiViewer.sendMessage('profiles', {
+                    type: 'profile_added',
+                    profile: sharedProfileData,
+                    geometryId: geometryId
+                });
+            }
+            
+        } catch (error) {
+            console.error(`Error sharing profile: ${error.message}`);
+        }
+    }
+    
+    /**
+     * CUSTOM - Create profile entry in sidebar
+     */
+    createProfileEntry(profile) {
+        try {
+            const measurementsContainer = this.dom.find(`#measurements_container_${this.viewerId}`);
+            if (measurementsContainer.length === 0) {
+                console.warn(`Measurements container not found for viewer ${this.viewerId}`);
+                return;
+            }
+            
+            const profileElement = $(`
+                <div class="measurement-entry profile-entry" data-profile-id="${profile.uuid}">
+                    <div class="measurement-header profile-header">
+                        <img src="${(window.Potree && window.Potree.resourcePath) || '../build/potree/resources'}/icons/profile.svg" class="measurement-icon profile-icon">
+                        <span class="measurement-name profile-name">${profile.name}</span>
+                        <div class="measurement-controls profile-controls">
+                            <button class="show-2d-profile-btn" data-profile-uuid="${profile.uuid}" title="Show 2D Profile">📊</button>
+                            <button class="delete-profile-btn" data-profile-uuid="${profile.uuid}" title="Delete Profile">×</button>
+                        </div>
+                    </div>
+                    <div class="measurement-info profile-info">
+                        <span>Points: ${profile.points ? profile.points.length : 0}</span>
+                        <span>Width: ${profile.width ? profile.width.toFixed(2) : 0}m</span>
+                        <span class="profile-creator">Created by: ${profile.createdBy || 'unknown'}</span>
+                    </div>
+                </div>
+            `);
+            
+            // Add Show 2D Profile button handler
+            profileElement.find('.show-2d-profile-btn').click((e) => {
+                e.stopPropagation();
+                this.show2DProfile(profile);
+            });
+            
+            // Add delete button handler
+            profileElement.find('.delete-profile-btn').click((e) => {
+                e.stopPropagation();
+                this.deleteProfile(profile);
+            });
+            
+            measurementsContainer.append(profileElement);
+            console.log(`Created profile entry for ${profile.name} in viewer ${this.viewerId}`);
+            
+        } catch (error) {
+            console.error(`Error creating profile entry: ${error.message}`);
+        }
+    }
+    
+    /**
+     * CUSTOM - Show 2D Profile Window
+     */
+    show2DProfile(profile) {
+        try {
+            if (this.viewer.profileWindow && this.viewer.profileWindowController) {
+                this.viewer.profileWindow.show();
+                this.viewer.profileWindowController.setProfile(profile);
+                console.log(`Opened 2D profile window for ${profile.name}`);
+            } else {
+                console.warn(`ProfileWindow not available for viewer ${this.viewerId} - this needs ProfileWindow initialization in ViewerManager`);
+            }
+        } catch (error) {
+            console.error(`Error showing 2D profile: ${error.message}`);
+        }
+    }
+    
+    /**
+     * CUSTOM - Delete profile from all viewers
+     */
+    deleteProfile(profile) {
+        try {
+            // Remove from local scene
+            if (this.viewer.scene && this.viewer.scene.removeProfile) {
+                this.viewer.scene.removeProfile(profile);
+            }
+            
+            // Remove from shared system
+            const testCore = window.testModules && window.testModules.testCore;
+            const multiViewer = testCore && testCore.getMultiViewer();
+            if (multiViewer) {
+                multiViewer.removeSharedGeometry(`profile_${profile.uuid}`, `delete_by_${this.viewerId}`);
+                
+                // Notify all viewers
+                multiViewer.sendMessage('profiles', {
+                    type: 'profile_removed',
+                    profileUuid: profile.uuid,
+                    removedBy: this.viewerId
+                });
+            }
+            
+            // Remove from sidebar
+            this.dom.find(`[data-profile-id="${profile.uuid}"]`).remove();
+            
+            console.log(`Deleted profile ${profile.name}`);
+            
+        } catch (error) {
+            console.error(`Error deleting profile: ${error.message}`);
+        }
+    }
+    
+    /**
+     * CUSTOM - Create volume entry in sidebar
+     */
+    createVolumeEntry(volume) {
+        try {
+            const measurementsContainer = this.dom.find(`#measurements_container_${this.viewerId}`);
+            if (measurementsContainer.length === 0) {
+                console.warn(`Measurements container not found for viewer ${this.viewerId}`);
+                return;
+            }
+            
+            const volumeElement = $(`
+                <div class="measurement-entry volume-entry" data-volume-id="${volume.uuid}">
+                    <div class="measurement-header volume-header">
+                        <img src="${(window.Potree && window.Potree.resourcePath) || '../build/potree/resources'}/icons/volume.svg" class="measurement-icon volume-icon">
+                        <span class="measurement-name volume-name">${volume.name}</span>
+                        <div class="measurement-controls volume-controls">
+                            <button class="delete-volume-btn" data-volume-uuid="${volume.uuid}" title="Delete Volume">×</button>
+                        </div>
+                    </div>
+                    <div class="measurement-info volume-info">
+                        <span class="volume-creator">Created by: ${volume.createdBy || 'unknown'}</span>
+                    </div>
+                </div>
+            `);
+            
+            // Add delete button handler
+            volumeElement.find('.delete-volume-btn').click((e) => {
+                e.stopPropagation();
+                this.deleteVolume(volume);
+            });
+            
+            measurementsContainer.append(volumeElement);
+            console.log(`Created volume entry for ${volume.name} in viewer ${this.viewerId}`);
+            
+        } catch (error) {
+            console.error(`Error creating volume entry: ${error.message}`);
+        }
+    }
+    
+    /**
+     * CUSTOM - Delete volume from all viewers
+     */
+    deleteVolume(volume) {
+        try {
+            // Remove from local scene
+            if (this.viewer.scene && this.viewer.scene.removeVolume) {
+                this.viewer.scene.removeVolume(volume);
+            }
+            
+            // Remove from shared system
+            const testCore = window.testModules && window.testModules.testCore;
+            const multiViewer = testCore && testCore.getMultiViewer();
+            if (multiViewer) {
+                multiViewer.removeSharedGeometry(`volume_${volume.uuid}`, `delete_by_${this.viewerId}`);
+                
+                // Notify all viewers
+                multiViewer.sendMessage('volumes', {
+                    type: 'volume_removed',
+                    volumeUuid: volume.uuid,
+                    removedBy: this.viewerId
+                });
+            }
+            
+            // Remove from sidebar
+            this.dom.find(`[data-volume-id="${volume.uuid}"]`).remove();
+            
+            console.log(`Deleted volume ${volume.name}`);
+            
+        } catch (error) {
+            console.error(`Error deleting volume: ${error.message}`);
+        }
     }
 }
 
