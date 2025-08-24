@@ -433,11 +433,17 @@ export class ProfileTool extends EventDispatcher {
 		
 		this.showInstructions('Profile created! Click "Show 2D Profile" in the sidebar to view.', 3000);
 
-		// Automatically show profile window
+		// Automatically show profile window - CUSTOM: Added debugging
+		console.log(`[DEBUG] ProfileTool.finalizeProfile - Checking ProfileWindow availability`);
+		console.log(`[DEBUG] viewer.profileWindow: ${!!this.viewer.profileWindow}`);
+		console.log(`[DEBUG] viewer.profileWindowController: ${!!this.viewer.profileWindowController}`);
+		
 		if (this.viewer.profileWindow && this.viewer.profileWindowController) {
-			
+			console.log(`[DEBUG] Calling profileWindow.show() and profileWindowController.setProfile()`);
 			this.viewer.profileWindow.show();
 			this.viewer.profileWindowController.setProfile(this.currentProfile);
+		} else {
+			console.error(`[DEBUG] ProfileWindow not available - profileWindow: ${!!this.viewer.profileWindow}, profileWindowController: ${!!this.viewer.profileWindowController}`);
 		}
 
 		let result = this.currentProfile;

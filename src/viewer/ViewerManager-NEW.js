@@ -22,6 +22,7 @@ import { SharedResourceManager } from "./SharedResourceManager-NEW.js";
 import { RenderOptimizer } from "./RenderOptimizer-NEW.js";
 import { CrossViewerCommunication } from "./CrossViewerCommunication-NEW.js";
 import { MultiViewerSidebar } from "./MultiViewerSidebar-NEW.js";
+import { ProfileWindow, ProfileWindowController } from "./profile.js"; // CUSTOM
 
 export class ViewerManager extends EventDispatcher {
     
@@ -304,6 +305,12 @@ export class ViewerManager extends EventDispatcher {
             console.error(`Failed to create sidebar for viewer '${viewerId}':`, error);
         });
         
+        // CUSTOM - Initialize ProfileWindow components for multi-viewer (after sidebar)
+        // Delay this to ensure proper initialization order
+        setTimeout(() => {
+            this.initializeProfileWindow(viewer, viewerId);
+        }, 500);
+        
         // Initialize camera management after viewer is ready
         setTimeout(() => {
             this.initializeCameraManagement(viewer, viewerId);
@@ -318,6 +325,135 @@ export class ViewerManager extends EventDispatcher {
     markViewerActivity(viewerId) {
         if (this.renderOptimizer) {
             this.renderOptimizer.markViewerActivity(viewerId);
+        }
+    }
+    
+    /**
+     * CUSTOM - Initialize ProfileWindow components for multi-viewer
+     * @param {Viewer} viewer - The viewer instance
+     * @param {string} viewerId - The viewer ID
+     */
+    initializeProfileWindow(viewer, viewerId) {
+        try {
+            console.log(`[DEBUG] initializeProfileWindow called for viewer ${viewerId}`);
+            console.log(`[DEBUG] Potree.scriptPath: ${window.Potree ? window.Potree.scriptPath : 'undefined'}`);
+            
+            // Check if profile.html template is needed
+            const existingProfileWindow = document.getElementById('profile_window');
+            console.log(`[DEBUG] Existing profile_window element: ${!!existingProfileWindow}`);
+            
+            if (!existingProfileWindow) {
+                // Load profile.html template dynamically
+                console.log(`[DEBUG] Loading profile.html template from scriptPath`);
+                const profileHtmlUrl = new URL(window.Potree.scriptPath + '/profile.html').href;
+                console.log(`[DEBUG] Profile HTML URL: ${profileHtmlUrl}`);
+                
+                fetch(profileHtmlUrl)
+                    .then(response => response.text())
+                    .then(html => {
+                        // Create a temporary container to parse the HTML
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = html;
+                        
+                        // Append profile window elements to body (only once)
+                        Array.from(tempDiv.children).forEach(child => {
+                            if (!document.getElementById(child.id)) {
+                                document.body.appendChild(child);
+                            }
+                        });
+                        
+                        // Now initialize ProfileWindow components for this viewer
+                        console.log(`[DEBUG] Creating ProfileWindow instances for viewer ${viewerId}`);
+                        console.log(`[DEBUG] ProfileWindow class available: ${!!window.Potree.ProfileWindow}`);
+                        console.log(`[DEBUG] ProfileWindowController class available: ${!!window.Potree.ProfileWindowController}`);
+                        
+                        viewer.profileWindow = new ProfileWindow(viewer);
+                        viewer.profileWindowController = new ProfileWindowController(viewer);
+                        
+                        console.log(`[DEBUG] ProfileWindow created: ${!!viewer.profileWindow}`);
+                        console.log(`[DEBUG] ProfileWindowController created: ${!!viewer.profileWindowController}`);
+                        
+                        // Make profile window draggable and resizable (jQuery UI) - CUSTOM
+                        if (window.$ && window.$.fn.draggable && window.$.fn.resizable) {
+                            window.$('#profile_window').draggable({
+                                handle: window.$('#profile_titlebar'),
+                                containment: window.$(document.body)
+                            });
+                            window.$('#profile_window').resizable({
+                                containment: window.$(document.body),
+                                handles: 'n, e, s, w'
+                            });
+                        }
+                        
+                        // CUSTOM - Mark ProfileWindow as ready
+                        viewer.profileWindowReady = true;
+                        console.log(`Initialized ProfileWindow for viewer ${viewerId} - ProfileWindow ready: ${!!viewer.profileWindow}`);
+                        
+                    })
+                    .catch(error => {
+                        console.error(`Failed to load profile.html template: ${error.message}`);
+                        console.log(`[DEBUG] Attempting fallback ProfileWindow initialization`);
+                        
+                        // Fallback: Try to create a minimal profile window structure
+                        this.createMinimalProfileWindow();
+                        
+                        // Initialize without template (will create basic structure)
+                        viewer.profileWindow = new ProfileWindow(viewer);
+                        viewer.profileWindowController = new ProfileWindowController(viewer);
+                        
+                        // CUSTOM - Mark ProfileWindow as ready even in fallback
+                        viewer.profileWindowReady = true;
+                        console.log(`[DEBUG] Fallback ProfileWindow initialization completed`);
+                    });
+            } else {
+                // Template already loaded, just initialize the components
+                viewer.profileWindow = new ProfileWindow(viewer);
+                viewer.profileWindowController = new ProfileWindowController(viewer);
+                
+                // CUSTOM - Mark ProfileWindow as ready
+                viewer.profileWindowReady = true;
+                console.log(`Initialized ProfileWindow for viewer ${viewerId} (template already loaded) - ProfileWindow ready: ${!!viewer.profileWindow}`);
+            }
+            
+        } catch (error) {
+            console.error(`Failed to initialize ProfileWindow for viewer ${viewerId}: ${error.message}`);
+        }
+    }
+    
+    /**
+     * CUSTOM - Create minimal profile window structure as fallback
+     */
+    createMinimalProfileWindow() {
+        if (!document.getElementById('profile_window')) {
+            const profileWindow = document.createElement('div');
+            profileWindow.id = 'profile_window';
+            profileWindow.style.cssText = 'position: absolute; width: 84%; left: 15%; top: 55%; height: 44%; margin: 5px; border: 1px solid black; display: none; box-sizing: border-box; z-index: 10000; background: white;';
+            
+            const titlebar = document.createElement('div');
+            titlebar.id = 'profile_titlebar';
+            titlebar.className = 'pv-titlebar';
+            titlebar.style.cssText = 'display: flex; position: absolute; height: 30px; width: 100%; box-sizing: border-box; background: #333; color: white; padding: 5px;';
+            titlebar.innerHTML = '<span id="profile_window_title">Profile</span><span style="flex-grow: 1;"></span><img id="closeProfileContainer" class="button-icon" style="width: 24px; height: 24px; cursor: pointer;">';
+            
+            const content = document.createElement('div');
+            content.style.cssText = 'position: absolute; top: 30px; width: 100%; height: calc(100% - 30px); box-sizing: border-box;';
+            content.className = 'pw_content';
+            
+            const canvasContainer = document.createElement('div');
+            canvasContainer.id = 'profileCanvasContainer';
+            canvasContainer.style.cssText = 'position: absolute; left: 40px; width: calc(100% - 40px); height: 100%;';
+            
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.id = 'profileSVG';
+            svg.style.cssText = 'position: absolute; width: 100%; height: 100%;';
+            
+            content.appendChild(canvasContainer);
+            content.appendChild(svg);
+            profileWindow.appendChild(titlebar);
+            profileWindow.appendChild(content);
+            document.body.appendChild(profileWindow);
+            
+            console.log(`[DEBUG] Created minimal profile window structure`);
         }
     }
     

@@ -1412,7 +1412,9 @@ export class MultiViewerSidebar {
         
         // CUSTOM - Profile event handler for shared storage across all viewers
         const onProfileAdded = (e) => {
-            console.log(`Profile added in viewer ${this.viewerId}:`, e.profile.name);
+            console.log(`[DEBUG] onProfileAdded event triggered in viewer ${this.viewerId}`);
+            console.log(`[DEBUG] Profile added:`, e.profile);
+            console.log(`[DEBUG] Profile name: ${e.profile.name}, UUID: ${e.profile.uuid}`);
             
             // Share profile across all viewers using communication system
             this.shareProfileWithAllViewers(e.profile);
@@ -1420,7 +1422,34 @@ export class MultiViewerSidebar {
             // Create JSTree entry like original sidebar
             const resourcePath = window.Potree.resourcePath || '../build/potree/resources';
             const icon = `${resourcePath}/icons/profile.svg`;
-            createNode(measurementID, e.profile.name, icon, e.profile);
+            const nodeId = createNode(measurementID, e.profile.name, icon, e.profile);
+            console.log(`[DEBUG] Created JSTree node for profile: ${nodeId}`);
+        };
+        
+        // CUSTOM - Profile removal event handler (following original sidebar.js pattern)
+        const onProfileRemoved = (e) => {
+            console.log(`[DEBUG] onProfileRemoved event triggered in viewer ${this.viewerId}`);
+            console.log(`[DEBUG] Profile to remove:`, e.profile);
+            console.log(`[DEBUG] Profile UUID: ${e.profile.uuid}`);
+            
+            // Remove from JSTree - Use the correct measurementID instead of hardcoded "measurements"
+            console.log(`[DEBUG] Using measurementID: ${measurementID}`);
+            const measurementsRoot = tree.jstree().get_json(measurementID);
+            console.log(`[DEBUG] Measurements root:`, measurementsRoot);
+            
+            if (measurementsRoot && measurementsRoot.children) {
+                const jsonNode = measurementsRoot.children.find(child => child.data.uuid === e.profile.uuid);
+                console.log(`[DEBUG] Found JSTree node to delete:`, jsonNode);
+                
+                if (jsonNode) {
+                    tree.jstree("delete_node", jsonNode.id);
+                    console.log(`[DEBUG] Removed profile node from JSTree: ${e.profile.name}`);
+                } else {
+                    console.error(`[DEBUG] Could not find JSTree node for profile UUID: ${e.profile.uuid}`);
+                }
+            } else {
+                console.error(`[DEBUG] No measurements root or children found in JSTree for measurementID: ${measurementID}`);
+            }
         };
         
         // CUSTOM - Volume event handler for shared storage across all viewers  
@@ -1441,6 +1470,7 @@ export class MultiViewerSidebar {
             this.viewer.scene.addEventListener("pointcloud_added", onPointCloudAdded);
             this.viewer.scene.addEventListener("measurement_added", onMeasurementAdded);
             this.viewer.scene.addEventListener("profile_added", onProfileAdded);
+            this.viewer.scene.addEventListener("profile_removed", onProfileRemoved);
             this.viewer.scene.addEventListener("volume_added", onVolumeAdded);
         }
 
@@ -1495,6 +1525,9 @@ export class MultiViewerSidebar {
                 if (object && object.material) {
                     // Point cloud properties
                     this.createPointCloudProperties(elProperties, object);
+                } else if (object && object.constructor && object.constructor.name === 'Profile') {
+                    // CUSTOM - Profile properties
+                    this.createProfileProperties(elProperties, object);
                 } else {
                     elProperties.html('<div style="padding: 10px; color: #999;">Select an object to view properties</div>');
                 }
@@ -3464,6 +3497,159 @@ export class MultiViewerSidebar {
         } catch (error) {
             console.error(`Error deleting volume: ${error.message}`);
         }
+    }
+    
+    /**
+     * CUSTOM - Create profile properties UI similar to original ProfilePanel
+     */
+    createProfileProperties(container, profile) {
+        const panel = $(`
+            <div class="measurement_content selectable">
+                <h4>Profile Properties</h4>
+                
+                <div class="profile-info">
+                    <div class="coordinates_table_container"></div>
+                </div>
+                
+                <br>
+                
+                <span style="display:flex">
+                    <span style="display:flex; align-items: center; padding-right: 10px">Width: </span>
+                    <input id="sldProfileWidth_${this.viewerId}" name="sldProfileWidth" value="${profile.width || 5.06}" style="flex-grow: 1; width:100%">
+                </span>
+                
+                <br><br>
+                
+                <input type="button" id="show_2d_profile_${this.viewerId}" value="Show 2D Profile" style="width: 100%; margin-bottom: 10px;" class="potree-button"/>
+                
+                <div style="display: flex; margin-top: 12px">
+                    <span></span>
+                    <span style="flex-grow: 1"></span>
+                    <button id="remove_profile_${this.viewerId}" class="potree-button" style="background: #ff4444; color: white; border: none; padding: 5px 10px; border-radius: 3px;">Delete Profile</button>
+                </div>
+            </div>
+        `);
+        
+        // Create coordinates table
+        if (profile.points && profile.points.length > 0) {
+            const coordsTable = this.createCoordinatesTable(profile.points);
+            panel.find('.coordinates_table_container').append(coordsTable);
+        }
+        
+        // Width spinner functionality
+        const elWidthSlider = panel.find(`#sldProfileWidth_${this.viewerId}`);
+        if (window.$ && window.$.fn.spinner) {
+            elWidthSlider.spinner({
+                min: 0, max: 10 * 1000 * 1000, step: 0.01,
+                numberFormat: 'n',
+                spin: (event, ui) => {
+                    const value = elWidthSlider.spinner('value');
+                    if (profile.setWidth) profile.setWidth(value);
+                },
+                change: (event, ui) => {
+                    const value = elWidthSlider.spinner('value');
+                    if (profile.setWidth) profile.setWidth(value);
+                }
+            });
+            elWidthSlider.spinner('value', profile.width || 5.06);
+            elWidthSlider.spinner('widget').css('width', '100%');
+        }
+        
+        // Show 2D Profile button handler - CUSTOM (following original ProfilePanel pattern)
+        panel.find(`#show_2d_profile_${this.viewerId}`).click(() => {
+            console.log(`[DEBUG] Show 2D Profile button clicked for viewer ${this.viewerId}`);
+            console.log(`[DEBUG] Profile object:`, profile);
+            console.log(`[DEBUG] this.viewer.profileWindow: ${!!this.viewer.profileWindow}`);
+            console.log(`[DEBUG] this.viewer.profileWindowController: ${!!this.viewer.profileWindowController}`);
+            
+            if (this.viewer.profileWindow && this.viewer.profileWindowController) {
+                console.log(`[DEBUG] Calling profileWindow.show() and setProfile()`);
+                this.viewer.profileWindow.show();
+                this.viewer.profileWindowController.setProfile(profile);
+                console.log(`Showing 2D profile window for profile: ${profile.name || profile.uuid}`);
+            } else {
+                console.error(`[ERROR] ProfileWindow not available for viewer ${this.viewerId} - profileWindow: ${!!this.viewer.profileWindow}, profileWindowController: ${!!this.viewer.profileWindowController}`);
+            }
+        });
+        
+        // Delete Profile button handler - CUSTOM (following original ProfilePanel pattern)
+        panel.find(`#remove_profile_${this.viewerId}`).click(() => {
+            console.log(`[DEBUG] Delete Profile button clicked for viewer ${this.viewerId}`);
+            console.log(`[DEBUG] Profile to delete:`, profile);
+            console.log(`[DEBUG] this.viewer.scene: ${!!this.viewer.scene}`);
+            console.log(`[DEBUG] this.viewer.scene.removeProfile: ${!!(this.viewer.scene && this.viewer.scene.removeProfile)}`);
+            
+            if (this.viewer.scene && this.viewer.scene.removeProfile) {
+                console.log(`[DEBUG] Calling viewer.scene.removeProfile()`);
+                this.viewer.scene.removeProfile(profile);
+                console.log(`Removed profile from scene: ${profile.name || profile.uuid}`);
+                
+                // Clear properties panel
+                const elProperties = this.dom.find(`#scene_object_properties_${this.viewerId}`);
+                elProperties.html('<div style="padding: 10px; color: #999;">Select an object to view properties</div>');
+            } else {
+                console.error(`[ERROR] Cannot remove profile - scene: ${!!this.viewer.scene}, removeProfile: ${!!(this.viewer.scene && this.viewer.scene.removeProfile)}`);
+            }
+        });
+        
+        container.append(panel);
+    }
+    
+    /**
+     * CUSTOM - Create coordinates table for measurements (copied from original MeasurePanel)
+     */
+    createCoordinatesTable(points) {
+        const table = $(`
+            <table class="measurement_coordinates">
+                <tr>
+                    <th></th>
+                    <th>x</th>
+                    <th>y</th>
+                    <th>z</th>
+                    <th>length</th>
+                </tr>
+            </table>
+        `);
+        
+        let totalLength = 0;
+        for (let i = 0; i < points.length; i++) {
+            const point = points[i];
+            let length = 0;
+            
+            if (i > 0) {
+                const previous = points[i - 1];
+                length = point.distanceTo(previous);
+                totalLength += length;
+            }
+            
+            const row = $(`
+                <tr>
+                    <td>${i}</td>
+                    <td>${point.x.toFixed(3)}</td>
+                    <td>${point.y.toFixed(3)}</td>
+                    <td>${point.z.toFixed(3)}</td>
+                    <td>${length.toFixed(3)}</td>
+                </tr>
+            `);
+            
+            table.append(row);
+        }
+        
+        // Add total length row
+        if (points.length > 1) {
+            const totalRow = $(`
+                <tr>
+                    <td><b>Total</b></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td><b>${totalLength.toFixed(3)}</b></td>
+                </tr>
+            `);
+            table.append(totalRow);
+        }
+        
+        return table;
     }
 }
 
