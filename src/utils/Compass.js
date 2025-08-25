@@ -21,6 +21,17 @@ export class Compass{
 			const p1 = camera.getWorldPosition(new THREE.Vector3());
 			const p2 = p1.clone().add(direction);
 
+			// CUSTOM - Validate camera position and direction before computing azimuth
+			const isValidVector = (vec) => Number.isFinite(vec.x) && Number.isFinite(vec.y) && Number.isFinite(vec.z);
+			
+			if (!isValidVector(p1) || !isValidVector(p2) || !isValidVector(direction)) {
+				console.warn('[Compass] Invalid camera position or direction detected, skipping compass update', {
+					position: { x: p1.x, y: p1.y, z: p1.z },
+					direction: { x: direction.x, y: direction.y, z: direction.z }
+				});
+				return; // Skip compass update for invalid coordinates
+			}
+
 			const projection = viewer.getProjection();
 			const azimuth = Utils.computeAzimuth(p1, p2, projection);
 			

@@ -10,12 +10,20 @@ import {PointCloudTree} from "../PointCloudTree.js";
 import {Renderer} from "../PotreeRenderer.js";
 import {PointCloudMaterial} from "../materials/PointCloudMaterial.js";
 import {PointSizeType} from "../defines.js";
+// CUSTOM - Enhanced profile material management
+import { ProfileMaterial } from "./ProfileMaterial-NEW.js";
+import { ProfileSystemRegistry } from "./ProfileSystemRegistry-NEW.js";
 
 
-function copyMaterial(source, target){
+// CUSTOM - Enhanced material copying with size preservation
+function copyMaterial(source, target, preserveSize = true){
+	// Store original size before copying uniforms if preservation is enabled
+	const originalSize = preserveSize ? (target.size || source.size || (source.uniforms.size && source.uniforms.size.value) || 0.2) : null;
 
 	for(let name of Object.keys(target.uniforms)){
-		target.uniforms[name].value = source.uniforms[name].value;
+		if (source.uniforms[name] !== undefined) {
+			target.uniforms[name].value = source.uniforms[name].value;
+		}
 	}
 
 	target.gradientTexture = source.gradientTexture;
@@ -25,6 +33,16 @@ function copyMaterial(source, target){
 
 	target.activeAttributeName = source.activeAttributeName;
 	target.ranges = source.ranges;
+
+	// CUSTOM - Restore original size if preservation is enabled
+	if (preserveSize && originalSize !== null) {
+		target.size = originalSize;
+		console.log(`[Profile] Preserved original size: ${originalSize}`);
+	} else if (!preserveSize) {
+		// Use source size for synchronization scenarios
+		target.size = source.size || (source.uniforms.size && source.uniforms.size.value) || 0.2;
+		console.log(`[Profile] Using source size: ${target.size}`);
+	}
 
 	//target.updateShaderSource();
 }
@@ -60,11 +78,12 @@ class ProfileFakeOctree extends PointCloudTree{
 		this.points = [];
 		this.visibleNodes = [];
 		
-		//this.material = this.trueOctree.material;
-		this.material = new PointCloudMaterial();
-		//this.material.copy(this.trueOctree.material);
-		copyMaterial(this.trueOctree.material, this.material);
+		// CUSTOM - Use ProfileMaterial for enhanced size management
+		this.material = new ProfileMaterial(this.trueOctree.material);
 		this.material.pointSizeType = PointSizeType.FIXED;
+		
+		// Store reference for cleanup
+		this.isProfileFakeOctree = true;
 
 		this.batchSize = 100 * 1000;
 		this.currentBatch = null
@@ -244,6 +263,13 @@ export class ProfileWindow extends EventDispatcher {
 		this.pointclouds = new Map();
 		this.numPoints = 0;
 		this.lastAddPointsTimestamp = undefined;
+		
+		// CUSTOM - Initialize profile system registry for enhanced material management
+		this.profileSystemRegistry = new ProfileSystemRegistry();
+		this.profileSystemRegistry.setDebugMode(false); // Set to true for debugging
+		
+		// CUSTOM - Track viewer ID for multi-viewer support
+		this.viewerId = viewer.multiViewerConfig ? viewer.multiViewerConfig.id : 'single-viewer';
 
 		this.mouse = new THREE.Vector2(0, 0);
 		this.scale = new THREE.Vector3(1, 1, 1);
@@ -746,8 +772,22 @@ export class ProfileWindow extends EventDispatcher {
 			entry = new ProfileFakeOctree(pointcloud);
 			this.pointclouds.set(pointcloud, entry);
 			this.profileScene.add(entry);
+			
+			// CUSTOM - Register profile material with the system registry
+			if (this.profileSystemRegistry && entry.material.isProfileMaterial) {
+				const profileId = `pointcloud_${pointcloud.uuid || Date.now()}`;
+				this.profileSystemRegistry.registerProfile(
+					this.viewerId,
+					{ uuid: profileId, name: pointcloud.name || 'Point Cloud Profile' },
+					pointcloud.material
+				);
+			}
 
 			let materialChanged = () => {
+				// CUSTOM - Sync with registry when source material changes
+				if (this.profileSystemRegistry) {
+					this.profileSystemRegistry.syncViewerProfiles(this.viewerId);
+				}
 				this.render();
 			};
 
@@ -799,6 +839,11 @@ export class ProfileWindow extends EventDispatcher {
 
 		this.autoFit = true;
 		this.projectedBox = new THREE.Box3();
+
+		// CUSTOM - Clean up profile system registry before disposing entries
+		if (this.profileSystemRegistry) {
+			this.profileSystemRegistry.cleanupViewer(this.viewerId);
+		}
 
 		for(let [key, entry] of this.pointclouds){
 			entry.dispose();
@@ -907,12 +952,21 @@ export class ProfileWindow extends EventDispatcher {
 		renderer.setClearColor(0x000000, 0);
 		renderer.clear(true, true, false);
 
+		// CUSTOM - Enhanced material synchronization with size preservation
 		for(let pointcloud of this.pointclouds.keys()){
 			let source = pointcloud.material;
 			let target = this.pointclouds.get(pointcloud).material;
 			
-			copyMaterial(source, target);
-			target.size = 2;
+			// Use ProfileMaterial's sync method if available, otherwise use enhanced copyMaterial
+			if (target.isProfileMaterial && typeof target.syncWithSource === 'function') {
+				target.syncWithSource();
+			} else {
+				// Enhanced copyMaterial with size preservation enabled by default
+				copyMaterial(source, target, true);
+			}
+			
+			// CUSTOM - Removed hardcoded size = 2, now uses preserved size from original material
+			// This fixes the issue where point sizes were changing from 0.2 to 2
 		}
 		
 		pRenderer.render(profileScene, camera, null);

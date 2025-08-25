@@ -23,6 +23,7 @@ import { RenderOptimizer } from "./RenderOptimizer-NEW.js";
 import { CrossViewerCommunication } from "./CrossViewerCommunication-NEW.js";
 import { MultiViewerSidebar } from "./MultiViewerSidebar-NEW.js";
 import { ProfileWindow, ProfileWindowController } from "./profile.js"; // CUSTOM
+import { ProfileWindowManager } from "./ProfileWindowManager-NEW.js"; // CUSTOM
 
 export class ViewerManager extends EventDispatcher {
     
@@ -45,6 +46,8 @@ export class ViewerManager extends EventDispatcher {
         this.sync = new ViewerSync(this);
         this.renderOptimizer = new RenderOptimizer(this);
         this.communication = new CrossViewerCommunication(this);
+        // CUSTOM - Enhanced profile window management
+        this.profileWindowManager = new ProfileWindowManager(this);
         
         // State management
         this.activeViewerId = null;
@@ -336,15 +339,39 @@ export class ViewerManager extends EventDispatcher {
     initializeProfileWindow(viewer, viewerId) {
         try {
             console.log(`[DEBUG] initializeProfileWindow called for viewer ${viewerId}`);
-            console.log(`[DEBUG] Potree.scriptPath: ${window.Potree ? window.Potree.scriptPath : 'undefined'}`);
             
-            // Check if profile.html template is needed
-            const existingProfileWindow = document.getElementById('profile_window');
-            console.log(`[DEBUG] Existing profile_window element: ${!!existingProfileWindow}`);
+            // CUSTOM - Use ProfileWindowManager for enhanced profile window management
+            // Create shared DOM structure first
+            const domCreated = this.profileWindowManager.createSharedProfileDOM();
+            console.log(`[DEBUG] Shared Profile DOM created: ${domCreated}`);
+            console.log(`[DEBUG] profile_window element exists: ${!!document.getElementById('profile_window')}`);
+            console.log(`[DEBUG] ProfileWindow class available: ${!!ProfileWindow}`);
+            console.log(`[DEBUG] ProfileWindowController class available: ${!!ProfileWindowController}`);
             
-            if (!existingProfileWindow) {
-                // Load profile.html template dynamically
-                console.log(`[DEBUG] Loading profile.html template from scriptPath`);
+            // Create ProfileWindow and ProfileWindowController instances
+            console.log(`[DEBUG] Attempting to create ProfileWindow instance...`);
+            const profileWindow = new ProfileWindow(viewer);
+            console.log(`[DEBUG] ProfileWindow instance created successfully`);
+            
+            // Set references on viewer BEFORE creating controller - CUSTOM
+            viewer.profileWindow = profileWindow;
+            console.log(`[DEBUG] Set viewer.profileWindow reference`);
+            
+            console.log(`[DEBUG] Attempting to create ProfileWindowController instance...`);
+            const profileController = new ProfileWindowController(viewer);
+            viewer.profileWindowController = profileController;
+            console.log(`[DEBUG] ProfileWindowController instance created successfully`);
+            
+            // Register with ProfileWindowManager
+            this.profileWindowManager.registerProfileWindow(viewerId, profileWindow, profileController);
+            viewer.profileWindowReady = true;
+            
+            console.log(`[DEBUG] Enhanced ProfileWindow initialized for viewer ${viewerId} via ProfileWindowManager`);
+            console.log(`[DEBUG] Final state - viewer.profileWindow: ${!!viewer.profileWindow}, viewer.profileWindowController: ${!!viewer.profileWindowController}`);
+            
+            // Legacy fallback handling for cases where DOM creation might fail
+            if (!document.getElementById('profile_window')) {
+                console.log(`[DEBUG] Fallback: Loading profile.html template from scriptPath`);
                 const profileHtmlUrl = new URL(window.Potree.scriptPath + '/profile.html').href;
                 console.log(`[DEBUG] Profile HTML URL: ${profileHtmlUrl}`);
                 
@@ -405,14 +432,6 @@ export class ViewerManager extends EventDispatcher {
                         viewer.profileWindowReady = true;
                         console.log(`[DEBUG] Fallback ProfileWindow initialization completed`);
                     });
-            } else {
-                // Template already loaded, just initialize the components
-                viewer.profileWindow = new ProfileWindow(viewer);
-                viewer.profileWindowController = new ProfileWindowController(viewer);
-                
-                // CUSTOM - Mark ProfileWindow as ready
-                viewer.profileWindowReady = true;
-                console.log(`Initialized ProfileWindow for viewer ${viewerId} (template already loaded) - ProfileWindow ready: ${!!viewer.profileWindow}`);
             }
             
         } catch (error) {

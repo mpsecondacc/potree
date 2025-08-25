@@ -35,7 +35,10 @@ export class ViewerSync extends EventDispatcher {
                 pointSize: true,
                 colorMode: true,
                 opacity: false,
-                elevationRange: false
+                elevationRange: false,
+                // CUSTOM - Profile-specific sync options
+                excludeProfileMaterials: true, // Exclude profile materials from automatic sync
+                profileSizeMode: 'independent' // 'independent' | 'synchronized'
             },
             scene: {
                 background: false,
@@ -361,6 +364,21 @@ export class ViewerSync extends EventDispatcher {
                 const targetMaterial = targetPointCloud.material;
                 
                 try {
+                    // CUSTOM - Skip profile materials if excludeProfileMaterials is enabled
+                    if (materialOptions.excludeProfileMaterials && targetMaterial.isProfileMaterial) {
+                        // Handle profile materials separately based on profileSizeMode
+                        if (materialOptions.profileSizeMode === 'synchronized' && materialOptions.pointSize) {
+                            // Override profile size preservation for synchronized mode
+                            const wasPreserving = targetMaterial.preserveOriginalSize;
+                            targetMaterial.setSizePreservation(false);
+                            targetMaterial.size = sourceMaterial.size;
+                            targetMaterial.setSizePreservation(wasPreserving);
+                            console.log(`[ViewerSync] Synchronized profile material size to ${sourceMaterial.size} for viewer '${targetViewerId}'`);
+                        }
+                        // Skip other material sync for profile materials in independent mode
+                        continue;
+                    }
+                    
                     // Sync point size
                     if (materialOptions.pointSize) {
                         targetMaterial.size = sourceMaterial.size;
@@ -381,6 +399,9 @@ export class ViewerSync extends EventDispatcher {
                         targetMaterial.elevationRange = [...sourceMaterial.elevationRange];
                     }
                     
+                    // CUSTOM - Handle profile window materials sync
+                    this.syncProfileWindowMaterials(targetViewer, targetViewerId, materialOptions);
+                    
                 } catch (error) {
                     console.error(`Error syncing material to viewer '${targetViewerId}':`, error);
                 }
@@ -395,6 +416,67 @@ export class ViewerSync extends EventDispatcher {
             groupId: syncGroup.id,
             targetViewers: syncGroup.viewerIds.filter(id => id !== sourceViewerId)
         });
+    }
+    
+    /**
+     * CUSTOM - Sync profile window materials for a specific viewer
+     * @param {Viewer} targetViewer - Target viewer
+     * @param {string} targetViewerId - Target viewer ID  
+     * @param {Object} materialOptions - Material sync options
+     */
+    syncProfileWindowMaterials(targetViewer, targetViewerId, materialOptions) {
+        // Check if viewer has profile window with registry
+        if (!targetViewer.profileWindow || !targetViewer.profileWindow.profileSystemRegistry) {
+            return;
+        }
+        
+        try {
+            const profileRegistry = targetViewer.profileWindow.profileSystemRegistry;
+            const preserveSize = materialOptions.profileSizeMode !== 'synchronized';
+            
+            // Sync profile materials based on mode
+            profileRegistry.syncViewerProfiles(targetViewerId, preserveSize);
+            
+            console.log(`[ViewerSync] Synced profile window materials for viewer '${targetViewerId}' (preserve size: ${preserveSize})`);
+            
+        } catch (error) {
+            console.error(`[ViewerSync] Error syncing profile window materials for viewer '${targetViewerId}':`, error);
+        }
+    }
+    
+    /**
+     * CUSTOM - Set profile size synchronization mode for all sync groups
+     * @param {string} mode - 'independent' or 'synchronized'
+     */
+    setProfileSizeMode(mode) {
+        if (!['independent', 'synchronized'].includes(mode)) {
+            console.warn(`[ViewerSync] Invalid profile size mode: ${mode}`);
+            return false;
+        }
+        
+        let updatedGroups = 0;
+        for (const syncGroup of this.syncGroups.values()) {
+            syncGroup.options.materials.profileSizeMode = mode;
+            updatedGroups++;
+        }
+        
+        console.log(`[ViewerSync] Updated ${updatedGroups} sync groups to profile size mode: ${mode}`);
+        return true;
+    }
+    
+    /**
+     * CUSTOM - Toggle profile material exclusion for all sync groups
+     * @param {boolean} exclude - Whether to exclude profile materials from sync
+     */
+    setExcludeProfileMaterials(exclude) {
+        let updatedGroups = 0;
+        for (const syncGroup of this.syncGroups.values()) {
+            syncGroup.options.materials.excludeProfileMaterials = exclude;
+            updatedGroups++;
+        }
+        
+        console.log(`[ViewerSync] Updated ${updatedGroups} sync groups - exclude profile materials: ${exclude}`);
+        return true;
     }
     
     /**
@@ -418,7 +500,7 @@ export class ViewerSync extends EventDispatcher {
         
         // Trigger sync events
         this.propagateCameraChange(sourceViewerId, { camera: sourceViewer.scene.getActiveCamera() });
-        // this.propagateMaterialChange(sourceViewerId, { material: sourceViewer.scene.pointclouds[0]?.material });
+        // this.propagateMaterialChange(sourceViewerId, { material: sourceViewer.scene.pointclouds[0] && sourceViewer.scene.pointclouds[0].material });
         
         console.log(`Force sync completed for group: ${groupId}`);
         return true;

@@ -3379,15 +3379,24 @@ export class MultiViewerSidebar {
      */
     show2DProfile(profile) {
         try {
-            if (this.viewer.profileWindow && this.viewer.profileWindowController) {
+            // CUSTOM - Use ProfileWindowManager for enhanced profile window management
+            if (this.viewerManager && this.viewerManager.profileWindowManager) {
+                const success = this.viewerManager.profileWindowManager.showProfileWindow(this.viewerId, profile);
+                if (success) {
+                    console.log(`[MultiViewerSidebar] Opened 2D profile window via ProfileWindowManager for viewer ${this.viewerId}`);
+                } else {
+                    console.error(`[MultiViewerSidebar] Failed to open profile window for viewer ${this.viewerId}`);
+                }
+            } else if (this.viewer.profileWindow && this.viewer.profileWindowController) {
+                // Fallback to direct profile window access
                 this.viewer.profileWindow.show();
                 this.viewer.profileWindowController.setProfile(profile);
-                console.log(`Opened 2D profile window for ${profile.name}`);
+                console.log(`[MultiViewerSidebar] Opened 2D profile window (fallback) for ${profile.name || profile.uuid}`);
             } else {
-                console.warn(`ProfileWindow not available for viewer ${this.viewerId} - this needs ProfileWindow initialization in ViewerManager`);
+                console.warn(`[MultiViewerSidebar] ProfileWindow not available for viewer ${this.viewerId} - ProfileWindowManager: ${!!(this.viewerManager && this.viewerManager.profileWindowManager)}`);
             }
         } catch (error) {
-            console.error(`Error showing 2D profile: ${error.message}`);
+            console.error(`[MultiViewerSidebar] Error showing 2D profile: ${error.message}`);
         }
     }
     
@@ -3559,17 +3568,9 @@ export class MultiViewerSidebar {
         panel.find(`#show_2d_profile_${this.viewerId}`).click(() => {
             console.log(`[DEBUG] Show 2D Profile button clicked for viewer ${this.viewerId}`);
             console.log(`[DEBUG] Profile object:`, profile);
-            console.log(`[DEBUG] this.viewer.profileWindow: ${!!this.viewer.profileWindow}`);
-            console.log(`[DEBUG] this.viewer.profileWindowController: ${!!this.viewer.profileWindowController}`);
             
-            if (this.viewer.profileWindow && this.viewer.profileWindowController) {
-                console.log(`[DEBUG] Calling profileWindow.show() and setProfile()`);
-                this.viewer.profileWindow.show();
-                this.viewer.profileWindowController.setProfile(profile);
-                console.log(`Showing 2D profile window for profile: ${profile.name || profile.uuid}`);
-            } else {
-                console.error(`[ERROR] ProfileWindow not available for viewer ${this.viewerId} - profileWindow: ${!!this.viewer.profileWindow}, profileWindowController: ${!!this.viewer.profileWindowController}`);
-            }
+            // CUSTOM - Use show2DProfile method which handles ProfileWindowManager
+            this.show2DProfile(profile);
         });
         
         // Delete Profile button handler - CUSTOM (following original ProfilePanel pattern)

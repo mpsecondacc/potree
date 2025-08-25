@@ -946,26 +946,52 @@ export class Utils {
 
 		let azimuth = 0;
 
+		// CUSTOM - Validate input coordinates to prevent proj4 errors
+		const p1Array = p1.toArray();
+		const p2Array = p2.toArray();
+		
+		// Check if coordinates are finite numbers
+		const isValidCoord = (coord) => coord.every(val => Number.isFinite(val));
+		
+		if (!isValidCoord(p1Array) || !isValidCoord(p2Array)) {
+			console.warn('[Utils] computeAzimuth: Invalid coordinates detected, returning default azimuth', { p1: p1Array, p2: p2Array });
+			return 0; // Return default azimuth for invalid coordinates
+		}
+
 		if(projection){
 			// if there is a projection, transform coordinates to WGS84
 			// and compute angle to north there
 
 			let transform;
 
-			if (projection.includes('EPSG')) {
-				transform = proj4(projection, "WGS84");
-			} else {
-				proj4.defs("pointcloud", projection);
-				transform = proj4("pointcloud", "WGS84");
-			}
+			try {
+				if (projection.includes('EPSG')) {
+					transform = proj4(projection, "WGS84");
+				} else {
+					proj4.defs("pointcloud", projection);
+					transform = proj4("pointcloud", "WGS84");
+				}
 
-			const llP1 = transform.forward(p1.toArray());
-			const llP2 = transform.forward(p2.toArray());
-			const dir = [
-				llP2[0] - llP1[0],
-				llP2[1] - llP1[1],
-			];
-			azimuth = Math.atan2(dir[1], dir[0]) - Math.PI / 2;
+				const llP1 = transform.forward(p1Array);
+				const llP2 = transform.forward(p2Array);
+				
+				// Validate transformed coordinates
+				if (!isValidCoord(llP1) || !isValidCoord(llP2)) {
+					console.warn('[Utils] computeAzimuth: Invalid transformed coordinates, using fallback calculation');
+					const dir = [p2.x - p1.x, p2.y - p1.y];
+					azimuth = Math.atan2(dir[1], dir[0]) - Math.PI / 2;
+				} else {
+					const dir = [
+						llP2[0] - llP1[0],
+						llP2[1] - llP1[1],
+					];
+					azimuth = Math.atan2(dir[1], dir[0]) - Math.PI / 2;
+				}
+			} catch (error) {
+				console.warn('[Utils] computeAzimuth: Projection transformation failed, using fallback calculation', error);
+				const dir = [p2.x - p1.x, p2.y - p1.y];
+				azimuth = Math.atan2(dir[1], dir[0]) - Math.PI / 2;
+			}
 		}else{
 			// if there is no projection, assume [0, 1, 0] as north direction
 
@@ -975,6 +1001,12 @@ export class Utils {
 
 		// make clockwise
 		azimuth = -azimuth;
+
+		// CUSTOM - Validate final azimuth value
+		if (!Number.isFinite(azimuth)) {
+			console.warn('[Utils] computeAzimuth: Final azimuth is not finite, returning 0');
+			azimuth = 0;
+		}
 
 		return azimuth;
 	}
