@@ -25,11 +25,7 @@ export class Compass{
 			const isValidVector = (vec) => Number.isFinite(vec.x) && Number.isFinite(vec.y) && Number.isFinite(vec.z);
 			
 			if (!isValidVector(p1) || !isValidVector(p2) || !isValidVector(direction)) {
-				console.warn('[Compass] Invalid camera position or direction detected, skipping compass update', {
-					position: { x: p1.x, y: p1.y, z: p1.z },
-					direction: { x: direction.x, y: direction.y, z: direction.z }
-				});
-				return; // Skip compass update for invalid coordinates
+				return; // Skip compass update for invalid coordinates - CUSTOM
 			}
 
 			const projection = viewer.getProjection();

@@ -24,6 +24,11 @@ export class ProfileMaterial extends PointCloudMaterial {
         this.originalSize = null;
         this.preserveOriginalSize = true;
         
+        // CUSTOM - Mark source material to prevent RenderOptimizer modifications
+        if (sourceMaterial) {
+            sourceMaterial.isSourceForProfile = true;
+        }
+        
         // Initialize from source material if provided
         if (sourceMaterial) {
             this.initializeFromSource(sourceMaterial);
@@ -105,6 +110,12 @@ export class ProfileMaterial extends PointCloudMaterial {
     updateSource(newSource) {
         if (newSource && newSource !== this.sourceMaterial) {
             this.sourceMaterial = newSource;
+            
+            // CUSTOM - Mark new source material to prevent RenderOptimizer modifications
+            if (newSource) {
+                newSource.isSourceForProfile = true;
+            }
+            
             this.syncWithSource();
             console.log('[ProfileMaterial] Updated source material reference');
         }

@@ -516,6 +516,12 @@ export class RenderOptimizer extends EventDispatcher {
         if (viewer.scene && viewer.scene.pointclouds) {
             viewer.scene.pointclouds.forEach(pointcloud => {
                 if (pointcloud.material) {
+                    // CUSTOM - Skip materials that are being used by profile views to preserve original point sizes
+                    if (pointcloud.material.isSourceForProfile) {
+                        console.log('[RenderOptimizer] Skipping point size adjustment for profile source material');
+                        return;
+                    }
+                    
                     switch (qualityLevel) {
                         case 'low':
                             pointcloud.material.size = Math.max(1, pointcloud.material.size * 0.7);
